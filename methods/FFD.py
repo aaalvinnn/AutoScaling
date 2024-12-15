@@ -22,7 +22,7 @@ class FFD:
     def _update_deploy_state(self, ms, deploy_num):
         for node in self.Node_list:
             # 当前节点能部署该微服务的最大实例数
-            max_deploy_num = int(min(min(node.get_cpu()//ms.get_cpu(), node.get_memory()//ms.get_memory()), deploy_num))
+            max_deploy_num = int(min(min(node.cpu//ms.cpu, node.memory//ms.memory), deploy_num))
             rest_deploy_num = deploy_num - max_deploy_num
 
             if max_deploy_num == 0:
@@ -34,8 +34,8 @@ class FFD:
             
             # 更新state
             self.state[0][ms.id][node.id] += max_deploy_num
-            self.state[1][:, node.id] -= ms.get_cpu() * max_deploy_num
-            self.state[2][:, node.id] -= ms.get_memory() * max_deploy_num
+            self.state[1][:, node.id] -= ms.cpu * max_deploy_num
+            self.state[2][:, node.id] -= ms.memory * max_deploy_num
 
             # 更新node
             node.delpoy(ms, max_deploy_num)

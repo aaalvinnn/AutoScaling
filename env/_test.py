@@ -1,8 +1,11 @@
 from datastruct import *
 from config import EnvConfig
+from environment import DataCenterEnvironment
 import sys
 sys.path.append('./')
 from methods import FFD
+import numpy as np
+import copy
 
 
 config = EnvConfig()
@@ -61,7 +64,20 @@ def _test_init_deploy():
 
     print("success")
 
+def _test_env():
+    env = DataCenterEnvironment(config)
+    env.reset()
+    action1 = np.zeros(env.state[0].shape, dtype=int)
+    state1, reward1, _, _ = env.step(action1)
+    action2 = copy.deepcopy(action1)
+    action2[0][0] = -2
+    action2[0][4] = 2
+    state2, reward2, _, _ = env.step(action2)
+    print("success")
+
+
 if __name__ == '__main__':
-    _test_ms_instance()
-    _test_server_node()
-    _test_init_deploy()
+    # _test_ms_instance()
+    # _test_server_node()
+    # _test_init_deploy()
+    _test_env()
