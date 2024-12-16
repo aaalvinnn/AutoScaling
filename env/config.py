@@ -37,9 +37,9 @@ class EnvConfig:
         self.weight_cpu_and_memory = 0.1    # FFD对资源排序时，resource = cpu + weight_cpu_and_memory * memory，以平衡数值
 
         # 用户、请求链配置
-        self.request_flow_nums = 5
+        self.request_flow_nums = 1
         self.min_request_chain_length = 3
-        self.max_request_chain_length = 8
+        self.max_request_chain_length = 3
 
         # 模型配置
 

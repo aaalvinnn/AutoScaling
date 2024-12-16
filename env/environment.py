@@ -2,8 +2,6 @@ import numpy as np
 from datastruct import *
 import gymnasium as gym
 from config import EnvConfig
-import sys
-sys.path.append('./')
 from methods import FFD
 import math
 import copy
@@ -33,6 +31,10 @@ class DataCenterEnvironment(gym.Env):
         # TODO 动作、状态空间
         self.state = None
         pass
+
+    def _reset_seed(self):        
+        random.seed(self.seed)
+        np.random.seed(self.seed)
 
     def _reset_datastruct(self):
         """ 重置数据结构  """
@@ -175,6 +177,17 @@ class DataCenterEnvironment(gym.Env):
 
         return res
     
+    def _get_first_route_prob(self, ms1_id):
+        """ 计算由中央虚拟总节点路由到部署了ms1_id节点的概率 """
+        ms1_nodes = np.where(self.state[0][ms1_id] > 0)[0]
+        res = np.zeros(len(ms1_nodes))
+        for i, node1_id in enumerate(ms1_nodes):
+            image_nums = self.state[0][ms1_id][node1_id]
+            sum_image_nums = np.sum(self.state[0][ms1_id][ms1_nodes])
+            res[i] = image_nums / sum_image_nums
+
+        return res
+    
     def _get_node2node_bw_matrix(self, ms1_id, ms2_id):
         """
         计算两个微服务在当前状态下的节点间传输带宽矩阵
@@ -198,6 +211,7 @@ class DataCenterEnvironment(gym.Env):
         
         t_route = 0
         start, end = 0, 1
+        pre_route_probs = self._get_first_route_prob(request.ms_list[0])
         while end < request.length:
             ms1_id, ms2_id = request.ms_list[start], request.ms_list[end]
             # 计算概率路由矩阵
@@ -206,8 +220,11 @@ class DataCenterEnvironment(gym.Env):
             node2node_bw = self._get_node2node_bw_matrix(ms1_id, ms2_id)
             # 计算微服务依赖数据大小
             ms2ms_data = self.MS2MS_data_graph[ms1_id][ms2_id]
-            
-            t_route += np.sum(route_probs * ms2ms_data / node2node_bw)
+            # 先沿列逐行求和，得到每个start节点的路由延迟，然后再乘上选到start节点的概率
+            t_route_tmp = np.sum(route_probs * ms2ms_data / node2node_bw, axis=1)
+            t_route += np.dot(t_route_tmp, pre_route_probs)
+            # 更新pre_route_probs
+            pre_route_probs = pre_route_probs @ route_probs
             start += 1
             end += 1
             
@@ -225,7 +242,7 @@ class DataCenterEnvironment(gym.Env):
 
             t_total += t_exe + t_route
 
-        return t_total
+        return t_total, t_exe, t_route
 
     def _cal_load_std(self):
         """ 计算负载方差 """
@@ -235,6 +252,7 @@ class DataCenterEnvironment(gym.Env):
             pass
 
     def reset(self):
+        self._reset_seed()
         self.timeslot.reset()   # 重置时间
         self._reset_datastruct()    # 重置各数据结构
         self._init_deploy()     # 第一次部署
@@ -245,7 +263,6 @@ class DataCenterEnvironment(gym.Env):
         执行一个时隙
         TODO
         """
-        
         if self.state is None:
             raise ValueError("Environment not initialized, run reset() first.")
         
@@ -253,7 +270,7 @@ class DataCenterEnvironment(gym.Env):
         ns, penalty = self._update_deployed_state(action)
 
         # 计算时延
-        delay = self._cal_total_access_delay()
+        delay, t_exe, t_route = self._cal_total_access_delay()
 
         # 预测下一时隙的请求流到达率
         # TODO
@@ -263,7 +280,7 @@ class DataCenterEnvironment(gym.Env):
         reward = - (self.config.w_ns_and_delay * ns + (1-self.config.w_ns_and_delay) * delay) + penalty
         done = self.timeslot.is_end()
         
-        return self._get_state(), delay, done, {}
+        return self._get_state(), (delay, t_exe, t_route), done, {}
     
     def render(self):
         pass
