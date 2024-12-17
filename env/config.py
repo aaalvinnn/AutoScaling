@@ -17,8 +17,8 @@ class EnvConfig:
         self.node_max_cpu_resource = 30
         self.node_min_memory_resource = 200  # 内存 GB
         self.node_max_memory_resource = 300
-        self.node2node_min_bandwidth = 3    # 节点间传输带宽
-        self.node2node_max_bandwidth = 3
+        self.node2node_min_bandwidth = 1    # 节点间传输带宽
+        self.node2node_max_bandwidth = 5
 
         # 微服务配置
         self.ms_nums = 10
@@ -37,9 +37,9 @@ class EnvConfig:
         self.weight_cpu_and_memory = 0.1    # FFD对资源排序时，resource = cpu + weight_cpu_and_memory * memory，以平衡数值
 
         # 用户、请求链配置
-        self.request_flow_nums = 1
+        self.request_flow_nums = 10
         self.min_request_chain_length = 3
-        self.max_request_chain_length = 3
+        self.max_request_chain_length = 6
 
         # 模型配置
 

@@ -60,6 +60,7 @@ class MSInstance(object):
         self.cpu = random.randint(min_cpu, max_cpu)
         self.memory = random.randint(min_memory, max_memory)
         self.lamda = random.randint(min_lamda, max_lamda)
+        self.init_lamda = self.lamda
         self.mu = random.randint(min_mu, max_mu)
 
     def __eq__(self, other):
