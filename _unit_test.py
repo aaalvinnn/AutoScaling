@@ -13,7 +13,7 @@ def reset_seed(seed=1037):
 
 reset_seed()
 
-def _test_ms_instance():
+def test_ms_instance():
     ms_instance = MSInstance(
                             0,
                             config.ms_min_cpu_resource,
@@ -25,7 +25,7 @@ def _test_ms_instance():
     print(ms_instance.memory)
     print("success")
 
-def _test_server_node():
+def test_server_node():
     node = Node(0)
     ms_instance = MSInstance(0)
     flag1 = node.is_resource_enough(ms_instance, 1)
@@ -35,7 +35,7 @@ def _test_server_node():
     # flag4 = node.delpoy(ms_instance, -2)
     print("success")
 
-def _test_init_deploy():
+def test_init_deploy():
     ms_num = 10
     node_num = 5
     ms_list = [MSInstance(i, 1, 2, 10, 20) for i in range(ms_num)]
@@ -51,7 +51,7 @@ def _test_init_deploy():
 
     print("success")
 
-def _test_env():
+def test_route_delay():
     # request chain: [7, 5, 6]
     env = DataCenterEnvironment(config)
     env.reset()
@@ -99,9 +99,25 @@ def _test_env():
     state5, delay5, _, _ = env.step(action5)
     print("success")    # debug断点
 
+def test_exe_delay():
+     # request chain: [7, 5, 6]
+    env = DataCenterEnvironment(config)
+    env.reset()
+    action1 = np.zeros(env.state[0].shape, dtype=int)
+    state1, delay1, _, _ = env.step(action1)
+
+    env.reset()
+    action2 = copy.deepcopy(action1)
+    action2[7][4] = 4
+    action2[5][4] = 4
+    action2[6][4] = 4
+    state2, delay2, _, _ = env.step(action2)
+
+    print("success")
 
 if __name__ == '__main__':
-    # _test_ms_instance()
-    # _test_server_node()
-    # _test_init_deploy()
-    _test_env()
+    # test_ms_instance()
+    # test_server_node()
+    # test_init_deploy()
+    # test_route_delay()
+    test_exe_delay()
