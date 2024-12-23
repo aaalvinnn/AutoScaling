@@ -17,7 +17,7 @@ class LogHelper(object):
                         "delay": ["total delay","exe delay", "route delay"],
                         "vload": None,
                         "ns": None,
-                        "lamda": None,
+                        "lamda": ["real_lammda", "predicted_lammda"],
                         "ave_ro": None
                     }
         pass

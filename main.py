@@ -1,5 +1,5 @@
 from env import config, environment, loghelper
-from methods import RandomScaling
+from methods import Predicter, RandomScaling
 
 
 class TrainAndTestHelper(object):
@@ -27,7 +27,8 @@ class TrainAndTestHelper(object):
 
 if __name__ == '__main__':
     env_config = config.EnvConfig()
-    env = environment.DataCenterEnvironment(env_config)
+    predicter = Predicter.SMAPredictor(env_config.ms_nums, env_config.predicter_window_size)
+    env = environment.DataCenterEnvironment(env_config, predicter)
     agent = RandomScaling.RandomScalingAgent(env)
     logger = loghelper.LogHelper()
     train_and_test_helper = TrainAndTestHelper(env, agent, logger)
