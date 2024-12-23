@@ -33,9 +33,9 @@ class FFD:
                     continue
             
             # 更新state
-            self.state[0][ms.id][node.id] += max_deploy_num
-            self.state[1][:, node.id] -= ms.cpu * max_deploy_num
-            self.state[2][:, node.id] -= ms.memory * max_deploy_num
+            self.state["deploy_info"][ms.id][node.id] += max_deploy_num
+            self.state["cpus"][node.id] -= ms.cpu * max_deploy_num
+            self.state["memories"][node.id] -= ms.memory * max_deploy_num
 
             # 更新node
             node.delpoy(ms, max_deploy_num)

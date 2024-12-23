@@ -2,7 +2,7 @@ import numpy as np
 from datastruct import *
 import gymnasium as gym
 from config import EnvConfig
-from methods import FFD
+from methods import FFD, Predicter
 import math
 import copy
 
@@ -11,10 +11,13 @@ class DataCenterEnvironment(gym.Env):
 
     def __init__(
             self,
-            env_config: EnvConfig
+            id: int,
+            env_config: EnvConfig,
             ):
         """ 初始化参数 """
+        super(DataCenterEnvironment, self).__init__()
         # 环境参数配置
+        self.id = id
         self.seed = env_config.seed
         self.config = env_config
         self.timeslot = TimeSlot(self.config.time_slot_start, self.config.time_slot_end)
@@ -28,13 +31,33 @@ class DataCenterEnvironment(gym.Env):
         self.RequestFlow_list = []
         self.Node2Node_bandwidth_graph = None
         self.MS2MS_data_graph = None
+        # 请求流预测器
+        self.predicter = Predicter.SMAPredictor(self.ms_nums, self.config.predicter_window_size)
         # TODO 动作、状态空间
-        self.state = None
+        self.state = None   # to be filled in reset()
+        # self.action_space = (1, 1, 1)
+        # self.observation_space = {
+        #     "deploy_info": (self.ms_nums, self.server_node_nums),
+        #     "cpus": (self.server_node_nums,),
+        #     "memories": (self.server_node_nums,),
+        #     "predicted_lamda": (self.ms_nums,)
+        # }
+        self.observation_space = gym.spaces.Tuple((
+            gym.spaces.Box(low=0, high=1, shape=(self.ms_nums, self.server_node_nums), dtype=np.float32),
+            gym.spaces.Box(low=0, high=1, shape=(self.server_node_nums,)),
+            gym.spaces.Box(low=0, high=1, shape=(self.server_node_nums,)),
+            gym.spaces.Box(low=0, high=1, shape=(self.ms_nums,))
+        ))
+        self.action_space = gym.spaces.Tuple((
+            gym.spaces.Discrete(self.server_node_nums),
+            gym.spaces.Discrete(self.ms_nums),
+            gym.spaces.Discrete(self.config.max_instance_update_num * 2 + 1)
+        ))
         pass
 
-    def _reset_seed(self):        
-        random.seed(self.seed)
-        np.random.seed(self.seed)
+    def _reset_seed(self, seed):        
+        random.seed(seed)
+        np.random.seed(seed)
 
     def _reset_datastruct(self):
         """ 重置数据结构  """
@@ -50,12 +73,19 @@ class DataCenterEnvironment(gym.Env):
         self.MS2MS_data_graph = self._generate_ms2ms_data_graph(self.ms_nums)
         # 初始化微服务实例镜像数量
         self.ms_image_list = self.config.init_ms_image_list
-        # 服务器微服务实例部署情况、CPU剩余资源、内存剩余资源
-        self.state = np.zeros((3, self.ms_nums, self.server_node_nums))
-        for node_idx in range(self.state[0].shape[1]):
+        # 服务器微服务实例部署情况、CPU剩余资源、内存剩余资源、预测的请求到达率
+        self.state = {
+            "deploy_info": np.zeros((self.ms_nums, self.server_node_nums)),
+            "cpus": np.zeros(self.server_node_nums),
+            "memories": np.zeros(self.server_node_nums),
+            "predicted_lamda": np.zeros(self.ms_nums)
+        }
+        for node_idx in range(self.server_node_nums):
             node = self.Node_list[node_idx]
-            self.state[1][:, node_idx] = node.cpu
-            self.state[2][:, node_idx] = node.memory
+            self.state["cpus"][node_idx] = node.cpu
+            self.state["memories"][node_idx] = node.memory
+        for ms_idx in range(self.ms_nums):
+            self.state["predicted_lamda"][ms_idx] = self.config.ms_min_lamda # 用较小的到达率初始化state
 
     def _init_deploy(self):
         """ 第一次部署 """
@@ -114,7 +144,7 @@ class DataCenterEnvironment(gym.Env):
         penalty = 0
 
         # 若输入动作为一个长度为3的向量：(node_id, ms_id, delta)
-        if action.shape == (3,):
+        if len(action) == 3:
             node_idx, ms_idx, delta = action
             ms = self.MS_list[ms_idx]  # 微服务
             node = self.Node_list[node_idx]  # 服务器节点
@@ -123,9 +153,9 @@ class DataCenterEnvironment(gym.Env):
                 # 更新self.Node_list
                 cpu, memory = node.delpoy(ms, delta)
                 # 更新self.state
-                self.state[0][ms_idx, node_idx] += delta
-                self.state[1][:, node_idx] = cpu
-                self.state[2][:, node_idx] = memory
+                self.state["deploy_info"][ms_idx, node_idx] += delta
+                self.state["cpus"][node_idx] = cpu
+                self.state["memories"][node_idx] = memory
                 # 更新self.ms_image_list
                 self.ms_image_list[ms_idx] += delta
                 # 更新返回值
@@ -136,9 +166,9 @@ class DataCenterEnvironment(gym.Env):
             return total_update_instance_nums, penalty
         
         # 若输入动作为一个二维矩阵，则对每个微服务进行部署
-        elif action.shape == self.state[0].shape:
-            for ms_idx in range(self.state[0].shape[0]):
-                for node_idx in range(self.state[0].shape[1]):
+        elif action.shape == self.state["deploy_info"].shape:
+            for ms_idx in range(self.ms_nums):
+                for node_idx in range(self.server_node_nums):
                     delta = action[ms_idx, node_idx]
                     ms = self.MS_list[ms_idx]  # 微服务
                     node = self.Node_list[node_idx]  # 服务器节点
@@ -147,9 +177,9 @@ class DataCenterEnvironment(gym.Env):
                         # 更新self.Node_list
                         cpu, memory = node.delpoy(ms, delta)
                         # 更新self.state
-                        self.state[0][ms_idx, node_idx] += delta
-                        self.state[1][:, node_idx] = cpu
-                        self.state[2][:, node_idx] = memory
+                        self.state["deploy_info"][ms_idx, node_idx] += delta
+                        self.state["cpus"][node_idx] = cpu
+                        self.state["memories"][node_idx] = memory
                         # 更新self.ms_image_list
                         self.ms_image_list[ms_idx] += delta
                         # 更新返回值
@@ -159,7 +189,12 @@ class DataCenterEnvironment(gym.Env):
 
             return total_update_instance_nums, penalty
         
-        raise ValueError(f"Action shape {action.shape} does not match state shape {self.state[0].shape}!")
+        raise ValueError(f"Action shape {action.shape} does not match state shape {self.state['deploy_info'].shape}!")
+
+    def _update_state_lamda(self, lamda: list):
+        """ 更新微服务请求的到达率状态输入 """
+        for ms_idx in range(self.ms_nums):
+            self.state["predicted_lamda"][ms_idx] = lamda[ms_idx]
 
     def _get_route_prob_matrix(self, ms1_id, ms2_id):
         """
@@ -169,26 +204,26 @@ class DataCenterEnvironment(gym.Env):
         """
         w1 = 1
         w2 = 1
-        ms1_nodes = np.where(self.state[0][ms1_id] > 0)[0]
-        ms2_nodes = np.where(self.state[0][ms2_id] > 0)[0]
+        ms1_nodes = np.where(self.state["deploy_info"][ms1_id] > 0)[0]
+        ms2_nodes = np.where(self.state["deploy_info"][ms2_id] > 0)[0]
         res = np.zeros((len(ms1_nodes), len(ms2_nodes)))
         for i, node1_id in enumerate(ms1_nodes):
             for j, node2_id in enumerate(ms2_nodes):
                 bw = self.Node2Node_bandwidth_graph[node1_id, node2_id]
-                image_nums = self.state[0][ms2_id][node2_id]
+                image_nums = self.state["deploy_info"][ms2_id][node2_id]
                 sum_bw = np.sum(self.Node2Node_bandwidth_graph[node1_id][ms2_nodes])
-                sum_image_nums = np.sum(self.state[0][ms2_id][ms2_nodes])
+                sum_image_nums = np.sum(self.state["deploy_info"][ms2_id][ms2_nodes])
                 res[i][j] = (w1*bw + w2*image_nums) / (sum_bw + sum_image_nums)
 
         return res
     
     def _get_first_route_prob(self, ms1_id):
         """ 计算由中央虚拟总节点路由到部署了ms1_id节点的概率 """
-        ms1_nodes = np.where(self.state[0][ms1_id] > 0)[0]
+        ms1_nodes = np.where(self.state["deploy_info"][ms1_id] > 0)[0]
         res = np.zeros(len(ms1_nodes))
         for i, node1_id in enumerate(ms1_nodes):
-            image_nums = self.state[0][ms1_id][node1_id]
-            sum_image_nums = np.sum(self.state[0][ms1_id][ms1_nodes])
+            image_nums = self.state["deploy_info"][ms1_id][node1_id]
+            sum_image_nums = np.sum(self.state["deploy_info"][ms1_id][ms1_nodes])
             res[i] = image_nums / sum_image_nums
 
         return res
@@ -199,8 +234,8 @@ class DataCenterEnvironment(gym.Env):
         param ms1: 源微服务 id
         param ms2: 目标微服务 id
         """
-        ms1_nodes = np.where(self.state[0][ms1_id] > 0)[0]
-        ms2_nodes = np.where(self.state[0][ms2_id] > 0)[0]
+        ms1_nodes = np.where(self.state["deploy_info"][ms1_id] > 0)[0]
+        ms2_nodes = np.where(self.state["deploy_info"][ms2_id] > 0)[0]
         res = np.zeros((len(ms1_nodes), len(ms2_nodes)))
         for i, node1_id in enumerate(ms1_nodes):
             for j, node2_id in enumerate(ms2_nodes):
@@ -318,7 +353,7 @@ class DataCenterEnvironment(gym.Env):
         for ms in self.MS_list:
             lamda_list.append(ms.lamda)
 
-        return sum(lamda_list) / len(lamda_list)
+        return lamda_list
 
 
     def _update_arrival_rate(self, request_lamda):
@@ -327,12 +362,31 @@ class DataCenterEnvironment(gym.Env):
             ms.lamda = request_lamda * ms.init_lamda
         pass
 
-    def reset(self):
-        self._reset_seed()
+    def _standardize_state(self, state):
+        """ 标准化状态 """
+        observation = copy.deepcopy(state)
+        # 部署情况
+        observation["deploy_info"] /= min(
+            self.config.node_max_cpu_resource / self.config.ms_min_cpu_resource,
+            self.config.node_max_memory_resource / self.config.ms_min_memory_resource
+        )
+        # cpu、memory剩余资源情况
+        observation["cpus"] /= self.config.node_max_cpu_resource
+        observation["memories"] /= self.config.node_max_memory_resource
+        # 预测的各个微服务请求到达率情况
+        observation["predicted_lamda"] /= self.config.estimated_max_lamda
+
+        return observation
+        
+    def reset(self, seed=None, options=None):
+        self._reset_seed(seed)
         self.timeslot.reset()   # 重置时间
         self._reset_datastruct()    # 重置各数据结构
         self._init_deploy()     # 第一次部署
-        return self._get_state()
+        self.predicter.reset()
+        observation = self._standardize_state(self.state)  
+        observation = tuple(observation[key] for key in observation)    # 输出tuple类型，以方便训练
+        return observation, {}
 
     def step(self, action):
         """
@@ -342,26 +396,35 @@ class DataCenterEnvironment(gym.Env):
         if self.state is None:
             raise ValueError("Environment not initialized, run reset() first.")
         
-        # Autoscaling 部署策略
+        # 在每个时隙开始时预测这一时隙的请求流到达率
+        # TODO
+        predict_lamda = self.predicter.predict()
+        self._update_state_lamda(predict_lamda)
+
+        # 更新实际的请求到达率
+        lamda = log_request_flow(1, self.timeslot.get_now())
+        self._update_arrival_rate(lamda)
+        
+        # 在每个时隙开始时Autoscaling 部署策略
         ns, penalty = self._update_deployed_state(action)
 
-        # 统计信息
+        # 在每个时隙结束时从环境采样和统计信息
         delay, t_exe, t_route = self._cal_total_access_delay()
         vload = self._cal_load_variance(0.5)
-        lamda = self._cal_average_lamda()
+        lamda_list = self._cal_average_lamda()
         ave_ro = self._cal_average_service_intensity()
-
-        # 预测下一时隙的请求流到达率
-        # TODO
-        next_lamda = log_request_flow(1, self.timeslot.get_now())
-        self._update_arrival_rate(next_lamda)
+        self.predicter.record(lamda_list)
 
         # 状态转移
         self.timeslot.add_time()
         reward = - (self.config.w_ns_and_delay * ns + (1-self.config.w_ns_and_delay) * delay) + penalty
         done = self.timeslot.is_end()
-        
-        return self._get_state(), reward, done, {"delay": (delay, t_exe, t_route), "vload": vload, "ns": ns, "lamda": lamda, "ave_ro": ave_ro}
+
+        # 返回一个标准化的observation，方便训练
+        observation = self._standardize_state(self.state)
+        observation = tuple(observation[key] for key in observation)    # 输出tuple类型，以方便训练
+
+        return observation, reward, done, False, {"delay": (delay, t_exe, t_route), "vload": vload, "ns": ns, "lamda": (np.mean(lamda_list), np.mean(predict_lamda)), "ave_ro": ave_ro}
     
     def render(self):
         pass
