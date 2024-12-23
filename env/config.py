@@ -40,8 +40,30 @@ class EnvConfig:
         self.request_flow_nums = 10
         self.min_request_chain_length = 3
         self.max_request_chain_length = 6
+        self.estimated_max_lamda = 15
 
-        # 模型配置
+        # 模型、算法配置
+        self.predicter_window_size = 5
+        self.episode_nums = 1000
+        self.lr = 2.5e-4
+        self.update_epochs = 10
+        self.clip_coef = 0.2
+        self.clip_vloss = True
+        self.ent_coef = 0.01
+        self.vf_coef = 0.5
+        self.max_grad_norm = 0.5
+        self.norm_adv = True
+
+        # 训练配置
+        self.device = "cpu"
+        self.num_steps = self.time_slot_end - self.time_slot_start + 1
+        self.num_envs = 4
+        self.batch_size = int(self.num_envs * self.num_steps)
+        self.num_minibatches = 4
+        self.minibatch_size = int(self.batch_size // self.num_minibatches)
+        self.total_epoches = 1000
+        self.total_timesteps = self.total_epoches * self.num_steps
+        self.num_iterations = self.total_timesteps // self.batch_size
 
         # 奖励配置
         self.penalty = -10
