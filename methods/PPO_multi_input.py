@@ -10,7 +10,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import tyro
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
@@ -35,24 +34,23 @@ class ActorCritic(nn.Module):
         super().__init__()
         self.node_nums = node_nums
         self.ms_nums = ms_nums
+        self.delta = max_delta*2+1
 
         # CNN for processing deploy_info
         self.cnn = nn.Sequential(
             layer_init(nn.Conv2d(1, 8, kernel_size=2, stride=1)),
             nn.ReLU(),
-            layer_init(nn.Conv2d(8, 8, kernel_size=2, stride=1)),
+            layer_init(nn.Conv2d(8, 16, kernel_size=2, stride=1)),
             nn.ReLU(),
-            layer_init(nn.Conv2d(8, 8, kernel_size=2, stride=1)),
+            layer_init(nn.Conv2d(16, 64, kernel_size=2, stride=1)),
             nn.ReLU(),
             nn.Flatten(),
         )
-        cnn_output_size = (self.ms_nums-3) * (self.node_nums-3) * 8
+        cnn_output_size = (self.ms_nums-3) * (self.node_nums-3) * 64
 
         # MLP for processing cpu remaining resources
         self.mlp_cpu = nn.Sequential(
             layer_init(nn.Linear(self.node_nums, 64)),
-            nn.ReLU(),
-            layer_init(nn.Linear(64, 64)),
             nn.ReLU(),
         )
 
@@ -60,15 +58,11 @@ class ActorCritic(nn.Module):
         self.mlp_mem = nn.Sequential(
             layer_init(nn.Linear(self.node_nums, 64)),
             nn.ReLU(),
-            layer_init(nn.Linear(64, 64)),
-            nn.ReLU(),
         )
 
         # MLP for processing request lamda
         self.mlp_lamda = nn.Sequential(
             layer_init(nn.Linear(self.ms_nums, 64)),
-            nn.ReLU(),
-            layer_init(nn.Linear(64, 64)),
             nn.ReLU(),
         )
 
@@ -81,7 +75,7 @@ class ActorCritic(nn.Module):
         # Actor heads (discrete actions)
         self.actor_nodeIdx = layer_init(nn.Linear(256, self.node_nums), std=0.01)
         self.actor_msIdx = layer_init(nn.Linear(256, self.ms_nums), std=0.01)
-        self.actor_delta = layer_init(nn.Linear(256, max_delta), std=0.01)
+        self.actor_delta = layer_init(nn.Linear(256, self.delta), std=0.01)
 
         # Critic for value function
         self.critic = nn.Sequential(
@@ -90,12 +84,10 @@ class ActorCritic(nn.Module):
 
     def get_value(self, ob):
         # Process CNN and MLP inputs
-        obs = [torch.Tensor(ob[i]).to(CONFIG.device) for i in len(ob)]
-        obs[0] = obs[0].unsqueeze(1)
-        deploy_features = self.cnn(obs[0])
-        cpu_features = self.mlp_cpu(torch.Tensor(obs[1]).to(CONFIG.device))
-        mem_features = self.mlp_mem(torch.Tensor(obs[2]).to(CONFIG.device))
-        lamda_features = self.mlp_lamda(torch.Tensor(obs[3]).to(CONFIG.device))
+        deploy_features = self.cnn(ob[:,0,:,:].unsqueeze(1))
+        cpu_features = self.mlp_cpu(ob[:,1,0,:])
+        mem_features = self.mlp_mem(ob[:,2,0,:])
+        lamda_features = self.mlp_lamda(ob[:,3,:,0])
         combined_features = torch.cat([deploy_features, cpu_features, mem_features, lamda_features], dim=-1)
 
         # Extract shared features
@@ -104,12 +96,10 @@ class ActorCritic(nn.Module):
 
     def get_action_and_value(self, ob, action=None):
         # Process CNN and MLP inputs
-        obs = [torch.Tensor(ob[i]).to(CONFIG.device) for i in range(len(ob))]
-        obs[0] = obs[0].unsqueeze(1)
-        deploy_features = self.cnn(obs[0])
-        cpu_features = self.mlp_cpu(torch.Tensor(obs[1]).to(CONFIG.device))
-        mem_features = self.mlp_mem(torch.Tensor(obs[2]).to(CONFIG.device))
-        lamda_features = self.mlp_lamda(torch.Tensor(obs[3]).to(CONFIG.device))
+        deploy_features = self.cnn(ob[:,0,:,:].unsqueeze(1))
+        cpu_features = self.mlp_cpu(ob[:,1,0,:])
+        mem_features = self.mlp_mem(ob[:,2,0,:])
+        lamda_features = self.mlp_lamda(ob[:,3,:,0])
         combined_features = torch.cat([deploy_features, cpu_features, mem_features, lamda_features], dim=-1)
 
         # Extract shared features
@@ -131,8 +121,12 @@ class ActorCritic(nn.Module):
             action_msIdx = probs_msIdx.sample()
             action_delta = probs_delta.sample()
 
-        # Combine actions
-        action = torch.stack([action_nodeIdx, action_msIdx, action_delta], dim=-1)
+            # Combine actions
+            action = torch.stack([action_nodeIdx, action_msIdx, action_delta], dim=-1)
+        else:
+            action_nodeIdx = action[:, 0]
+            action_msIdx = action[:, 1]
+            action_delta = action[:, 2]
 
         # Log probabilities，同等权重的直接相加
         logprob_nodeIdx = probs_nodeIdx.log_prob(action_nodeIdx)
@@ -151,7 +145,7 @@ class PPOAgent(object):
         # Basic config
         self.env = env
         self.config = config
-        self.actorcrtic = ActorCritic(env.server_node_nums, env.ms_nums, config.max_instance_update_num)
+        self.actorcrtic = ActorCritic(env.server_node_nums, env.ms_nums, config.max_instance_update_num).to(CONFIG.device)
         self.optimizer = optim.Adam(self.actorcrtic.parameters(), lr=config.lr, eps=1e-5)
         # params
         self.gamma = 0.99
@@ -164,13 +158,9 @@ def make_env(env_id, config):
 
     return thunk
 
-def store_next_obs(obs_dict: dict, next_obs: tuple, step: int):
-    for i, key in enumerate(OBS_KEYS):
-        obs_dict[key][step] = torch.Tensor(next_obs[i]).to(CONFIG.device)
-
 def train(agent: PPOAgent):
     CONFIG = config.EnvConfig()
-    writer = SummaryWriter(f"runs/PPO")
+    writer = SummaryWriter(f"runs/PPO_multi_input")
 
     # TRY NOT TO MODIFY: seeding
     random.seed(CONFIG.seed)
@@ -184,9 +174,7 @@ def train(agent: PPOAgent):
     )
 
     # Storage setup
-    obs = {}
-    for i, space in enumerate(envs.single_observation_space):
-        obs[OBS_KEYS[i]] = torch.zeros((CONFIG.num_steps, CONFIG.num_envs) + space.shape).to(CONFIG.device)
+    obs = torch.zeros((CONFIG.num_steps, CONFIG.num_envs) + envs.single_observation_space.shape).to(CONFIG.device)
     actions = torch.zeros((CONFIG.num_steps, CONFIG.num_envs, len(envs.single_action_space))).to(CONFIG.device)
     logprobs = torch.zeros((CONFIG.num_steps, CONFIG.num_envs)).to(CONFIG.device)
     rewards = torch.zeros((CONFIG.num_steps, CONFIG.num_envs)).to(CONFIG.device)
@@ -197,13 +185,15 @@ def train(agent: PPOAgent):
     global_step = 0
     start_time = time.time()
     next_obs, _ = envs.reset(seed=CONFIG.seed)
+    next_obs = torch.Tensor(next_obs).to(CONFIG.device)
     next_done = torch.zeros(CONFIG.num_envs).to(CONFIG.device)
 
     for iteration in range(1, CONFIG.num_iterations + 1):
+        total_reward = []
+        total_congested_ms_nums = []
         for step in range(0, CONFIG.num_steps):
             global_step += CONFIG.num_envs
-            # obs[step] = next_obs
-            store_next_obs(obs, next_obs, step)
+            obs[step] = next_obs
             dones[step] = next_done
 
             # ALGO LOGIC: action logic
@@ -214,14 +204,23 @@ def train(agent: PPOAgent):
             logprobs[step] = logprob
 
             # TRY NOT TO MODIFY: execute the game and log data.
-            next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())        # ERROR！！！:传入step后是按列截取的，而我们期望是按行截取的
+            next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy().T)        # 传入step后是按列截取的，而我们期望是按行截取的，故转置一下
             next_done = np.logical_or(terminations, truncations)
             rewards[step] = torch.tensor(reward).to(CONFIG.device).view(-1)
-            next_obs, next_done = torch.Tensor(next_obs).to(CONFIG.device), torch.Tensor(next_done).to(CONFIG.device)
+            next_obs = torch.Tensor(next_obs).to(CONFIG.device)
+            next_done = torch.Tensor(next_done).to(CONFIG.device)
+
+            if "final_info" in infos:
+                print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
+                writer.add_scalar("charts/total_reward", np.sum(total_reward), iteration)
+                writer.add_scalar("charts/total_congested_ms_nums", np.sum(total_congested_ms_nums), iteration)
+            else:
+                total_reward.append(np.sum(reward))
+                total_congested_ms_nums.append(np.mean(infos['congested_ms_nums']))
 
         # bootstrap value if not done
         with torch.no_grad():
-            next_value = agent.get_value(next_obs).reshape(1, -1)
+            next_value = agent.actorcrtic.get_value(next_obs).reshape(1, -1)
             advantages = torch.zeros_like(rewards).to(CONFIG.device)
             lastgaelam = 0
             for t in reversed(range(CONFIG.num_steps)):
@@ -238,7 +237,7 @@ def train(agent: PPOAgent):
         # flatten the batch
         b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
+        b_actions = actions.reshape((-1,) + (len(envs.single_action_space),))
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)

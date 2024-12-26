@@ -101,7 +101,7 @@ def test_route_delay():
 
 def test_exe_delay():
      # request chain: [7, 5, 6]
-    env = DataCenterEnvironment(config)
+    env = DataCenterEnvironment(0, config)
     env.reset()
     action1 = np.zeros(env.state[0].shape, dtype=int)
     state1, delay1, _, _ = env.step(action1)
