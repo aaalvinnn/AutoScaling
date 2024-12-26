@@ -42,12 +42,14 @@ class DataCenterEnvironment(gym.Env):
         #     "memories": (self.server_node_nums,),
         #     "predicted_lamda": (self.ms_nums,)
         # }
-        self.observation_space = gym.spaces.Tuple((
-            gym.spaces.Box(low=0, high=1, shape=(self.ms_nums, self.server_node_nums), dtype=np.float32),
-            gym.spaces.Box(low=0, high=1, shape=(self.server_node_nums,)),
-            gym.spaces.Box(low=0, high=1, shape=(self.server_node_nums,)),
-            gym.spaces.Box(low=0, high=1, shape=(self.ms_nums,))
-        ))
+
+        # self.observation_space = gym.spaces.Tuple((
+        #     gym.spaces.Box(low=0, high=1, shape=(self.ms_nums, self.server_node_nums), dtype=np.float32),
+        #     gym.spaces.Box(low=0, high=1, shape=(self.server_node_nums,)),
+        #     gym.spaces.Box(low=0, high=1, shape=(self.server_node_nums,)),
+        #     gym.spaces.Box(low=0, high=1, shape=(self.ms_nums,))
+        # ))
+        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(4, self.ms_nums, self.server_node_nums), dtype=np.float32)
         self.action_space = gym.spaces.Tuple((
             gym.spaces.Discrete(self.server_node_nums),
             gym.spaces.Discrete(self.ms_nums),
@@ -72,7 +74,7 @@ class DataCenterEnvironment(gym.Env):
         # 微服务间依赖数据大小图
         self.MS2MS_data_graph = self._generate_ms2ms_data_graph(self.ms_nums)
         # 初始化微服务实例镜像数量
-        self.ms_image_list = self.config.init_ms_image_list
+        self.ms_image_list = copy.deepcopy(self.config.init_ms_image_list)
         # 服务器微服务实例部署情况、CPU剩余资源、内存剩余资源、预测的请求到达率
         self.state = {
             "deploy_info": np.zeros((self.ms_nums, self.server_node_nums)),
@@ -146,6 +148,7 @@ class DataCenterEnvironment(gym.Env):
         # 若输入动作为一个长度为3的向量：(node_id, ms_id, delta)
         if len(action) == 3:
             node_idx, ms_idx, delta = action
+            delta = delta - self.config.max_instance_update_num
             ms = self.MS_list[ms_idx]  # 微服务
             node = self.Node_list[node_idx]  # 服务器节点
 
@@ -335,6 +338,17 @@ class DataCenterEnvironment(gym.Env):
             if ms_id in request.ms_list:
                 return True
         return False
+    
+    def _get_congested_queue_nums(self):
+        """ 计算当前时隙拥塞的队列数目 """
+        nums = 0
+        for ms in self.MS_list:
+            image_nums = self.ms_image_list[ms.id]
+            rho = ms.lamda / (ms.mu * image_nums + 1e-6)
+            if rho >= 1:
+                nums += 1
+
+        return nums
 
     def _cal_average_service_intensity(self):
         """ 计算平均服务强度 """
@@ -364,19 +378,29 @@ class DataCenterEnvironment(gym.Env):
 
     def _standardize_state(self, state):
         """ 标准化状态 """
-        observation = copy.deepcopy(state)
-        # 部署情况
-        observation["deploy_info"] /= min(
+        # # v1
+        # observation = copy.deepcopy(state)
+        # # 部署情况
+        # observation["deploy_info"] /= min(
+        #     self.config.node_max_cpu_resource / self.config.ms_min_cpu_resource,
+        #     self.config.node_max_memory_resource / self.config.ms_min_memory_resource
+        # )
+        # # cpu、memory剩余资源情况
+        # observation["cpus"] /= self.config.node_max_cpu_resource
+        # observation["memories"] /= self.config.node_max_memory_resource
+        # # 预测的各个微服务请求到达率情况
+        # observation["predicted_lamda"] /= self.config.estimated_max_lamda
+        # v2
+        res = np.zeros((4,) + state["deploy_info"].shape)
+        res[0] = state["deploy_info"] / min(
             self.config.node_max_cpu_resource / self.config.ms_min_cpu_resource,
             self.config.node_max_memory_resource / self.config.ms_min_memory_resource
         )
-        # cpu、memory剩余资源情况
-        observation["cpus"] /= self.config.node_max_cpu_resource
-        observation["memories"] /= self.config.node_max_memory_resource
-        # 预测的各个微服务请求到达率情况
-        observation["predicted_lamda"] /= self.config.estimated_max_lamda
+        res[1] = state["cpus"] / self.config.node_max_cpu_resource
+        res[2] = state["memories"] / self.config.node_max_memory_resource
+        res[3] = (state["predicted_lamda"] / self.config.estimated_max_lamda)[:,np.newaxis]
 
-        return observation
+        return res
         
     def reset(self, seed=None, options=None):
         self._reset_seed(seed)
@@ -385,7 +409,7 @@ class DataCenterEnvironment(gym.Env):
         self._init_deploy()     # 第一次部署
         self.predicter.reset()
         observation = self._standardize_state(self.state)  
-        observation = tuple(observation[key] for key in observation)    # 输出tuple类型，以方便训练
+        # observation = tuple(observation[key] for key in observation)    # 输出tuple类型，以方便训练
         return observation, {}
 
     def step(self, action):
@@ -414,17 +438,34 @@ class DataCenterEnvironment(gym.Env):
         lamda_list = self._cal_average_lamda()
         ave_ro = self._cal_average_service_intensity()
         self.predicter.record(lamda_list)
+        congested_ms_nums = self._get_congested_queue_nums()
 
         # 状态转移
         self.timeslot.add_time()
-        reward = - (self.config.w_ns_and_delay * ns + (1-self.config.w_ns_and_delay) * delay) + penalty
+        reward = 0
+        if congested_ms_nums == 0:
+            reward = - (self.config.w_ns_and_delay * ns + (1-self.config.w_ns_and_delay) * delay) + penalty
+        else:
+            reward = congested_ms_nums * self.config.penalty * 3
+
         done = self.timeslot.is_end()
 
         # 返回一个标准化的observation，方便训练
         observation = self._standardize_state(self.state)
-        observation = tuple(observation[key] for key in observation)    # 输出tuple类型，以方便训练
+        # observation = tuple(observation[key] for key in observation)    # 输出tuple类型，以方便训练
 
-        return observation, reward, done, False, {"delay": (delay, t_exe, t_route), "vload": vload, "ns": ns, "lamda": (np.mean(lamda_list), np.mean(predict_lamda)), "ave_ro": ave_ro}
+        # extra info
+        info = {
+            "delay": (delay, t_exe, t_route),
+            "vload": vload,
+            "ns": ns,
+            "lamda": (np.mean(lamda_list), np.mean(predict_lamda)),
+            "ave_ro": ave_ro,
+            "congested_ms_nums": congested_ms_nums,
+            "r": reward
+        }
+        
+        return observation, reward, done, False, info
     
     def render(self):
         pass
