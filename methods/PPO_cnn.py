@@ -151,13 +151,15 @@ def train(agent: PPOAgent):
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
-    next_obs, _ = envs.reset(seed=CONFIG.seed)
-    next_obs = torch.Tensor(next_obs).to(CONFIG.device)
-    next_done = torch.zeros(CONFIG.num_envs).to(CONFIG.device)
 
     for iteration in range(1, CONFIG.num_iterations + 1):
         total_reward = []
         total_congested_ms_nums = []
+        total_ns = []
+        total_image_nums = []
+        next_obs, _ = envs.reset(seed=CONFIG.seed)
+        next_obs = torch.Tensor(next_obs).to(CONFIG.device)
+        next_done = torch.zeros(CONFIG.num_envs).to(CONFIG.device)
         for step in range(0, CONFIG.num_steps):
             global_step += CONFIG.num_envs
             obs[step] = next_obs
@@ -177,15 +179,17 @@ def train(agent: PPOAgent):
             next_obs = torch.Tensor(next_obs).to(CONFIG.device)
             next_done = torch.Tensor(next_done).to(CONFIG.device)
 
-            if "final_info" in infos:
+            total_reward.append(np.sum(reward))
+            total_congested_ms_nums.append(np.mean(infos['congested_ms_nums']))
+            total_ns.append(np.mean(infos['ns']))
+            total_image_nums.append(np.mean(infos['image_nums']))
+
+            if terminations[0]:
                 print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
                 writer.add_scalar("charts/total_reward", np.sum(total_reward), iteration)
                 writer.add_scalar("charts/total_congested_ms_nums", np.sum(total_congested_ms_nums), iteration)
-            else:
-                total_reward.append(np.sum(reward))
-                total_congested_ms_nums.append(np.mean(infos['congested_ms_nums']))
-                    
-
+                writer.add_scalar("charts/total_ns", np.sum(total_ns), iteration)
+                writer.add_scalar("charts/total_image_nums", np.sum(total_image_nums), iteration)
 
         # bootstrap value if not done
         with torch.no_grad():
