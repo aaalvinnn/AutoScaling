@@ -205,18 +205,14 @@ class DataCenterEnvironment(gym.Env):
         param ms1: 源微服务 id
         param ms2: 目标微服务 id
         """
-        w1 = 1
-        w2 = 1
         ms1_nodes = np.where(self.state["deploy_info"][ms1_id] > 0)[0]
         ms2_nodes = np.where(self.state["deploy_info"][ms2_id] > 0)[0]
         res = np.zeros((len(ms1_nodes), len(ms2_nodes)))
         for i, node1_id in enumerate(ms1_nodes):
             for j, node2_id in enumerate(ms2_nodes):
-                bw = self.Node2Node_bandwidth_graph[node1_id, node2_id]
                 image_nums = self.state["deploy_info"][ms2_id][node2_id]
-                sum_bw = np.sum(self.Node2Node_bandwidth_graph[node1_id][ms2_nodes])
                 sum_image_nums = np.sum(self.state["deploy_info"][ms2_id][ms2_nodes])
-                res[i][j] = (w1*bw + w2*image_nums) / (sum_bw + sum_image_nums)
+                res[i][j] = image_nums / sum_image_nums
 
         return res
     
@@ -369,12 +365,16 @@ class DataCenterEnvironment(gym.Env):
 
         return lamda_list
 
-
     def _update_arrival_rate(self, request_lamda):
         """ 更新请求到达率 """
         for ms in self.MS_list:
             ms.lamda = request_lamda * ms.init_lamda
         pass
+
+    def _get_cost(self, ns):
+        """ 计算开销 """
+        c = 0.8
+        return c * ns + (1-c) * np.sum(self.ms_image_list)
 
     def _standardize_state(self, state):
         """ 标准化状态 """
@@ -434,6 +434,7 @@ class DataCenterEnvironment(gym.Env):
 
         # 在每个时隙结束时从环境采样和统计信息
         delay, t_exe, t_route = self._cal_total_access_delay()
+        cost = self._get_cost(ns)
         vload = self._cal_load_variance(0.5)
         lamda_list = self._cal_average_lamda()
         ave_ro = self._cal_average_service_intensity()
@@ -444,7 +445,7 @@ class DataCenterEnvironment(gym.Env):
         self.timeslot.add_time()
         reward = 0
         if congested_ms_nums == 0:
-            reward = - (self.config.w_ns_and_delay * ns + (1-self.config.w_ns_and_delay) * delay) + penalty
+            reward = - (self.config.w_ns_and_delay * cost + (1-self.config.w_ns_and_delay) * delay) + penalty
         else:
             reward = congested_ms_nums * self.config.penalty * 3
 
@@ -459,6 +460,7 @@ class DataCenterEnvironment(gym.Env):
             "delay": (delay, t_exe, t_route),
             "vload": vload,
             "ns": ns,
+            "image_nums": np.sum(self.ms_image_list),
             "lamda": (np.mean(lamda_list), np.mean(predict_lamda)),
             "ave_ro": ave_ro,
             "congested_ms_nums": congested_ms_nums,
