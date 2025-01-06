@@ -44,7 +44,7 @@ class DataCenterEnvironment(gym.Env):
         ))
         pass
 
-    def _reset_seed(self, seed):        
+    def _reset_seed(self, seed):
         random.seed(seed)
         np.random.seed(seed)
 
@@ -419,32 +419,25 @@ class DataCenterEnvironment(gym.Env):
         return res
         
     def reset(self, seed=None, options=None):
+        if seed is None:
+            seed = self.seed
+        # 重置
         self._reset_seed(seed)
         self.timeslot.reset()   # 重置时间
         self._reset_datastruct()    # 重置各数据结构
         self._init_deploy()     # 第一次部署
-        self.predicter.reset()
         self.request_lamda_list = read_data(self.config.data_path)
+        self.predicter.reset(self.request_lamda_list[0])    # 假定知道第一个到达率，让绘图美观一些
+
+        # 初始到达率
         self._update_arrival_rate(self.request_lamda_list[0])
+
+        # 预测一个初始值
+        self._update_state_lamda(self.predicter.predict())
+
         observation = self.get_observation()
 
         return observation, {}
-
-    def update_requests(self):
-        if self.state is None:
-            raise ValueError("Environment not initialized, run reset() first.")
-        
-        # 在每个时隙开始时预测这一时隙的请求流到达率
-        predict_lamda = self.predicter.predict()
-        self._update_state_lamda(predict_lamda)
-
-        # 更新实际的请求到达率
-        lamda = self.request_lamda_list.pop(0)
-        self._update_arrival_rate(lamda)
-
-        observation = self.get_observation()
-
-        return observation
 
     def step(self, action):
         """
@@ -453,20 +446,6 @@ class DataCenterEnvironment(gym.Env):
         """
         if self.state is None:
             raise ValueError("Environment not initialized, run reset() first.")
-        
-        """下列注释掉的语句放在函数update_requests()中，训练测试时执行示例:
-        ob = env.update_requests()
-        action = agent.get_action(ob)
-        next_state, reward, done, _, info = env.step(action)
-
-        # 在每个时隙开始时预测这一时隙的请求流到达率
-        predict_lamda = self.predicter.predict()
-        self._update_state_lamda(predict_lamda)
-
-        # 更新实际的请求到达率
-        lamda = self.request_lamda_list.pop(0)
-        self._update_arrival_rate(lamda)
-        """
         
         # 预测和更新完到达率后，更新Autoscaling 部署策略
         ns, penalty = self._update_deployed_state(action)
@@ -478,8 +457,6 @@ class DataCenterEnvironment(gym.Env):
         vload = self._cal_load_variance(0.5)
         ave_ro = self._cal_average_service_intensity()
         request_success_rate = self._cal_request_success_rate(t_total_list)
-        lamda_list = self._cal_lamda_list()
-        self.predicter.record(lamda_list)
 
         # 状态转移
         self.timeslot.add_time()
@@ -487,6 +464,17 @@ class DataCenterEnvironment(gym.Env):
         reward = - (self.config.w_ns_and_delay * cost + (1-self.config.w_ns_and_delay) * np.mean(t_total_list)) \
                 + penalty \
                 + 50 * request_success_rate
+
+        # 在该时隙结束时，收集统计本时隙到达率
+        lamda_list = self._cal_lamda_list()
+        self.predicter.record(lamda_list)
+
+        # 预测下一时隙的到达率
+        self._update_state_lamda(self.predicter.predict())
+
+        # 更新下一时隙的到达率
+        lamda = self.request_lamda_list.pop(0)
+        self._update_arrival_rate(lamda)
 
         done = self.timeslot.is_end()
         observation = self.get_observation()
@@ -502,8 +490,8 @@ class DataCenterEnvironment(gym.Env):
             "penalty": penalty/self.config.penalty,
             "node_using_num": node_using_num,
             "image_nums": np.sum(self.ms_image_list),
-            "ave_lamda": (np.mean(lamda_list), np.mean(self.predicter.predict())),
-            "lamda": lamda_list,
+            "predict_lamda": np.mean(self.predicter.predict()),
+            "lamda": np.mean(lamda_list),
             "ave_ro": ave_ro,
             "request_success_rate": request_success_rate,
             "r": reward
