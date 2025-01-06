@@ -6,8 +6,9 @@ from env import config
 
 env_config = config.EnvConfig() 
 class LogHelper(object):
-    def __init__(self):
-        self.data = defaultdict(list)
+    def __init__(self, agents):
+        self.agents_name = agents
+        self.data = {f"{agent}": defaultdict(list) for agent in self.agents_name}
         self.ylabel_metrics = {
                         "t_all": "ms",
                         "t_exe": "ms",
@@ -18,47 +19,32 @@ class LogHelper(object):
                         "penalty": "",
                         "node_using_num": "",
                         "image_nums": "",
-                        "ave_lamda": "requests/ts",
+                        "predict_lamda": "rts",
+                        "lamda": "rts",
                         "lamda": "requests/ts",
                         "ave_ro": "",
                         "request_success_rate": "",
                         "r": "",
                     }
-        self.legend = {
-                        "t_all": None,
-                        "t_exe": None,
-                        "t_route": None,
-                        "vload": None,
-                        "ns": None,
-                        "cost": None,
-                        "penalty": None,
-                        "node_using_num": None,
-                        "image_nums": None,
-                        "ave_lamda": ["real_lammda", "predicted_lammda"],
-                        "lamda": [i for i in range(env_config.ms_nums)],
-                        "ave_ro": None,
-                        "request_success_rate": None,
-                        "r": None,
-                    }
-        pass
 
-    def record(self, key, value):
-        self.data[key].append(value)
-        pass
+    def record(self, infos):
+        if len(infos) != len(self.agents_name):
+            raise ValueError(f"The length of infos {len(infos)} is not equal to the length of agents name {self.agents_name}")
+        
+        for i, agent_name in enumerate(self.agents_name):
+            for key in infos[i]:
+                self.data[agent_name][key].append(infos[i][key])
 
     def visualize(self):
-        for key in self.data:
-            plt.figure()
-            plt.plot(self.data[key], label=key)
-            plt.title(f"{key}")
+        for metric in self.ylabel_metrics.keys():
+            plt.figure(figsize=(10, 6))
+            for agent_name in self.agents_name:
+                if metric in self.data[agent_name]:
+                    plt.plot(self.data[agent_name][metric], label=agent_name)
+            plt.title(f"Comparison of {metric}")
             plt.xlabel("Time Slot")
-            plt.ylabel(f"{key}/({self.ylabel_metrics[key]})")
-            if self.legend[key]:
-                plt.legend(self.legend[key])
+            plt.ylabel(f"{metric} ({self.ylabel_metrics[metric]})")
+            plt.legend(loc="best")
+            plt.grid(True)
+            plt.tight_layout()
             plt.show()
-
-        pass
-
-
-    
-

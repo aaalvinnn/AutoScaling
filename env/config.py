@@ -32,7 +32,7 @@ class EnvConfig:
         self.ms_max_lamda = 3
         self.ms_min_mu = 3
         self.ms_max_mu = 5
-        self.ms2ms_min_data = 0     # 微服务间依赖数据大小
+        self.ms2ms_min_data = 5     # 微服务间依赖数据大小
         self.ms2ms_max_data = 10
         self.weight_cpu_and_memory = 0.1    # FFD对资源排序时，resource = cpu + weight_cpu_and_memory * memory，以平衡数值
 
@@ -43,7 +43,7 @@ class EnvConfig:
         self.estimated_max_lamda = 30
         self.init_lamda = 15
         self.min_request_T = 20     # 最大请求时延约束
-        self.max_request_T = 30     # 最大请求时延约束
+        self.max_request_T = 40     # 最大请求时延约束
         self.data_path = "data/loads-twitter.txt"
 
         # 开销

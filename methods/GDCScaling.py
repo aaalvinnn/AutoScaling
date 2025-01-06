@@ -9,18 +9,20 @@ class GDCScalingAgent(object):
     "ProScale: Proactive Autoscaling for Microservice With Time-Varying Workload at the Edge"
     """
     def __init__(self, env: environment.DataCenterEnvironment):
-        self.env = env
-        self.actoin_space_dim = np.zeros((self.env.ms_nums, self.env.server_node_nums))
+        self.env = env  # 环境的引用，实时监控env运行过程的状态变化
+        self.actoin_space_dim = np.zeros((self.env.ms_nums, self.env.server_node_nums), dtype=int)
         self.offset = self.env.config.max_instance_update_num
         self.Um = copy.deepcopy(self.env.Node_list)     # 虚拟节点列表，用于判断资源使用情况
-        self.ro_max = 0.5
+        self.ro_max = 0.75
+        self.ro_min = 0.5
         
-    def greedy_device_chosen(self, m, Um, pre_deploy_info):
+    def greedy_device_chosen(self, m, Um, pre_deploy_info, delta):
         """
         实现贪婪选择节点
         Input:
             m: 当前待部署的微服务
             Um: 当前微服务可以部署的设备集合
+            delta: 迁移伸缩数目,(-1, 1)
         Output:
             d*: 选择的设备
             tau_min: 在该设备上的最小总延迟
@@ -29,10 +31,10 @@ class GDCScalingAgent(object):
         d_star = None
 
         for d in Um:  # 遍历所有可选设备
-            if d.is_resource_enough(m, 1):  # 检查设备是否有足够资源
+            if d.is_resource_enough(m, delta):  # 检查设备是否有足够资源
                 # 构造一个虚拟的部署信息以供计算时延
                 delpoy_info = copy.deepcopy(pre_deploy_info)
-                delpoy_info[m.id][d.id] += 1
+                delpoy_info[m.id][d.id] += delta
                 # 计算路由时延、处理和排队时延等总时延
                 tau = np.mean(self.env.cal_total_access_delay(delpoy_info)[0])
 
@@ -57,11 +59,12 @@ class GDCScalingAgent(object):
             image_num = np.sum(pre_deploy_info[ms.id])
             ro = lamda / (image_num*ms.mu + 1e-6)
 
-            while ro >= self.ro_max:  # Greedy instance placement
+            while ro >= self.ro_max:
                 # 使用贪婪算法选择设备
-                node, tau_min = self.greedy_device_chosen(ms, self.Um, pre_deploy_info)
+                node, tau_min = self.greedy_device_chosen(ms, self.Um, pre_deploy_info, 1)
 
-                if node is None:  # 集群资源不足
+                # 集群资源不足
+                if node is None:
                     raise ValueError(f"The total resource is not enough to scale ms.{ms.id}!")
 
                 # 更新action
@@ -72,6 +75,27 @@ class GDCScalingAgent(object):
 
                 # 更新pre_deploy_info
                 pre_deploy_info[ms.id][node.id] += 1
+
+                # 更新ro
+                image_num = np.sum(pre_deploy_info[ms.id])
+                ro = lamda / (image_num*ms.mu + 1e-6)
+            
+            while ro < self.ro_min:
+                # 使用贪婪算法选择设备
+                node, tau_min = self.greedy_device_chosen(ms, self.Um, pre_deploy_info, -1)
+
+                # 集群资源不足
+                if node is None:
+                    raise ValueError(f"The total resource is not enough to scale ms.{ms.id}!")
+
+                # 更新action
+                action[ms.id][node.id] += -1
+
+                # 更新虚拟节点列表Um的资源使用情况
+                self.Um[node.id].delpoy(ms, -1)
+
+                # 更新pre_deploy_info
+                pre_deploy_info[ms.id][node.id] += -1
 
                 # 更新ro
                 image_num = np.sum(pre_deploy_info[ms.id])

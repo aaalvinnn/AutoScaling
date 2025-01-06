@@ -81,10 +81,12 @@ class Request(object):
                 ms_nums = config.ms_nums,
                 min_chain_length = config.min_request_chain_length,
                 max_chain_length = config.max_request_chain_length,
+                min_request_T = config.min_request_T,
+                max_request_T = config.max_request_T
         ) -> None:
         self.id = id
         self.length = random.randint(min_chain_length, max_chain_length)
-        self.T_max = random.randint(config.min_request_T, config.max_request_T)
+        self.T_max = min_request_T + (max_request_T-min_request_T)*(self.length-min_chain_length)/(max_chain_length-min_chain_length)
         self.ms_list = random.sample(range(ms_nums), self.length)
 
     def is_ms_needed(self, ms_id) -> bool:

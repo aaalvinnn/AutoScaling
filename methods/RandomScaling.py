@@ -6,8 +6,8 @@ import numpy as np
 
 class RandomScalingAgent(object):
     def __init__(self, env: environment.DataCenterEnvironment):
-        self.env = env
-        self.actoin_space_dim = np.array([env.server_node_nums, env.ms_nums, env.config.max_instance_update_num*2+1])
+        self.env = env  # 环境的引用，实时监控env运行过程的状态变化
+        self.actoin_space_dim = np.array([env.server_node_nums, env.ms_nums, env.config.max_instance_update_num*2+1], dtype=int)
         self.offset = self.env.config.max_instance_update_num
         pass
 
@@ -38,8 +38,5 @@ class RandomScalingAgent(object):
                 done = False
             else:
                 done = True
-
-        if (self.env._get_congested_queue_nums() > 0):
-            pass
             
         return np.array([node_id, ms_id, delta])
