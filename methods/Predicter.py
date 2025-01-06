@@ -8,7 +8,7 @@ class SMAPredictor(object):
         self.ms_nums = ms_nums
         self.window_size = window_size
         self.buffer = []
-        self.init_lamda = self.config.ms_min_lamda
+        self.init_lamda = self.config.init_lamda
 
     def reset(self):
         self.buffer.clear()

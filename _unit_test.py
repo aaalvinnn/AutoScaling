@@ -100,18 +100,21 @@ def test_route_delay():
     print("success")    # debug断点
 
 def test_exe_delay():
-     # request chain: [7, 5, 6]
+     # request chain: [1, 4, 3, 2, 0]
     env = DataCenterEnvironment(0, config)
-    env.reset()
-    action1 = np.zeros(env.state[0].shape, dtype=int)
-    state1, delay1, _, _ = env.step(action1)
+    env.reset(1037)
+    action1 = np.zeros(env.state["deploy_info"].shape, dtype=int)
+    state1, reward1, _, _, infos1 = env.step(action1)
 
-    env.reset()
+    env.reset(1037)
     action2 = copy.deepcopy(action1)
-    action2[7][4] = 4
-    action2[5][4] = 4
-    action2[6][4] = 4
-    state2, delay2, _, _ = env.step(action2)
+    action2[1][1] = 2
+    state2, reward2, _, _, infos2 = env.step(action2)
+
+    env.reset(1037)
+    action3 = copy.deepcopy(action1)
+    action3[1][0] = 2
+    state3, reward3, _, _, infos3 = env.step(action3)
 
     print("success")
 

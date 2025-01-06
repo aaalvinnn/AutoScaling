@@ -59,8 +59,7 @@ class MSInstance(object):
         self.id = id
         self.cpu = random.randint(min_cpu, max_cpu)
         self.memory = random.randint(min_memory, max_memory)
-        self.lamda = random.randint(min_lamda, max_lamda)
-        self.init_lamda = self.lamda
+        self.lamda = random.uniform(min_lamda, max_lamda)
         self.mu = random.randint(min_mu, max_mu)
 
     def __eq__(self, other):
@@ -85,7 +84,12 @@ class Request(object):
         ) -> None:
         self.id = id
         self.length = random.randint(min_chain_length, max_chain_length)
+        self.T_max = random.randint(config.min_request_T, config.max_request_T)
         self.ms_list = random.sample(range(ms_nums), self.length)
+
+    def is_ms_needed(self, ms_id) -> bool:
+        """ 检查请求链中是否包含该微服务 """
+        return ms_id in self.ms_list
 
 
 # ------------------------------------ Server Node Model -------------------------------------  #

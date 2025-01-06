@@ -39,11 +39,11 @@ class ActorCritic(nn.Module):
         # CNN for processing deploy_info
         cnn_output_size = (self.ms_nums-3) * (self.node_nums-3) * 64
         self.cnn = nn.Sequential(
-            layer_init(nn.Conv2d(4, 8, kernel_size=2, stride=1)),
+            layer_init(nn.Conv2d(5, 16, kernel_size=2, stride=1)),
             nn.ReLU(),
-            layer_init(nn.Conv2d(8, 16, kernel_size=2, stride=1)),
+            layer_init(nn.Conv2d(16, 32, kernel_size=2, stride=1)),
             nn.ReLU(),
-            layer_init(nn.Conv2d(16, 64, kernel_size=2, stride=1)),
+            layer_init(nn.Conv2d(32, 64, kernel_size=2, stride=1)),
             nn.ReLU(),
             nn.Flatten(),
             layer_init(nn.Linear(cnn_output_size, 256)),
@@ -110,9 +110,22 @@ class PPOAgent(object):
         self.config = config
         self.actorcrtic = ActorCritic(env.server_node_nums, env.ms_nums, config.max_instance_update_num).to(CONFIG.device)
         self.optimizer = optim.Adam(self.actorcrtic.parameters(), lr=config.lr, eps=1e-5)
-        # params
-        self.gamma = 0.99
-        self.gae_lambda = 0.95
+
+    
+    def save(self, path):
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
+        save_path = os.path.join(path, "model_cnn.pth")
+        torch.save(self.actorcrtic.state_dict(), save_path)
+
+    def load(self, path):
+        load_path = os.path.join(path, "model_cnn.pth")
+        self.actorcrtic.load_state_dict(torch.load(load_path))
+
+    def predict(self, ob):
+        # self.actorcrtic.eval()
+        action, _, _, _ = self.actorcrtic.get_action_and_value(ob)
+        return action.cpu().numpy().T
 
 def make_env(env_id, config):
     def thunk():
@@ -127,7 +140,7 @@ def store_next_obs(obs: list, next_obs: tuple, step: int):
 
 def train(agent: PPOAgent):
     CONFIG = config.EnvConfig()
-    writer = SummaryWriter(f"runs/PPO_cnn")
+    writer = SummaryWriter(f"runs/0103/PPO_cnn")
 
     # TRY NOT TO MODIFY: seeding
     random.seed(CONFIG.seed)
@@ -154,9 +167,14 @@ def train(agent: PPOAgent):
 
     for iteration in range(1, CONFIG.num_iterations + 1):
         total_reward = []
-        total_congested_ms_nums = []
+        total_delay = {"t_all": [], "t_exe": [], "t_route": []}
+        total_vload = []
         total_ns = []
+        total_cost = []
+        total_node_using_num = []
         total_image_nums = []
+        total_rsr = []  # 请求成功率
+        total_penalty = []
         next_obs, _ = envs.reset(seed=CONFIG.seed)
         next_obs = torch.Tensor(next_obs).to(CONFIG.device)
         next_done = torch.zeros(CONFIG.num_envs).to(CONFIG.device)
@@ -179,17 +197,31 @@ def train(agent: PPOAgent):
             next_obs = torch.Tensor(next_obs).to(CONFIG.device)
             next_done = torch.Tensor(next_done).to(CONFIG.device)
 
-            total_reward.append(np.sum(reward))
-            total_congested_ms_nums.append(np.mean(infos['congested_ms_nums']))
+            total_reward.append(np.mean(reward))
+            total_delay["t_all"].append(np.mean(infos['t_all']))
+            total_delay["t_exe"].append(np.mean(infos['t_exe']))
+            total_delay["t_route"].append(np.mean(infos['t_route']))
+            total_vload.append(np.mean(infos['vload']))
             total_ns.append(np.mean(infos['ns']))
+            total_cost.append(np.mean(infos['cost']))
+            total_node_using_num.append(np.mean(infos['node_using_num']))
             total_image_nums.append(np.mean(infos['image_nums']))
+            total_rsr.append(np.mean(infos['request_success_rate']))
+            total_penalty.append(np.mean(infos['penalty']))
 
             if terminations[0]:
                 print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
-                writer.add_scalar("charts/total_reward", np.sum(total_reward), iteration)
-                writer.add_scalar("charts/total_congested_ms_nums", np.sum(total_congested_ms_nums), iteration)
-                writer.add_scalar("charts/total_ns", np.sum(total_ns), iteration)
-                writer.add_scalar("charts/total_image_nums", np.sum(total_image_nums), iteration)
+                writer.add_scalar("charts/reward", np.sum(total_reward), iteration)
+                writer.add_scalar("charts/t_all", np.mean(total_delay["t_all"]), iteration)
+                writer.add_scalar("charts/t_exe", np.mean(total_delay["t_exe"]), iteration)
+                writer.add_scalar("charts/t_route", np.mean(total_delay["t_route"]), iteration)
+                writer.add_scalar("charts/vload", np.mean(total_vload), iteration)
+                writer.add_scalar("charts/ns", np.sum(total_ns), iteration)
+                writer.add_scalar("charts/cost", np.mean(total_cost), iteration)
+                writer.add_scalar("charts/node_using_num", np.mean(total_node_using_num), iteration)
+                writer.add_scalar("charts/image_nums", np.mean(total_image_nums), iteration)
+                writer.add_scalar("charts/rsr", np.mean(total_rsr), iteration)
+                writer.add_scalar("charts/penalty", np.sum(total_penalty), iteration)
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -282,6 +314,8 @@ def train(agent: PPOAgent):
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
+        agent.save(CONFIG.model_path)
+
     envs.close()
     writer.close()
     print("success")
@@ -289,4 +323,5 @@ def train(agent: PPOAgent):
 if __name__ == "__main__":
     _env = environment.DataCenterEnvironment(-1, CONFIG)    # 只用于定义agent，不参与实际训练
     agent = PPOAgent(_env, CONFIG)
+    # agent.load("model/0103")
     train(agent)

@@ -24,7 +24,7 @@ class RandomScalingAgent(object):
             ms_id = random.randint(0, self.actoin_space_dim[1] - 1)
             delta = random.randint(0, self.actoin_space_dim[2] - 1)
             # 计算动作执行后的服务强度
-            lamda = state[3][ms_id][0] * self.env.config.estimated_max_lamda
+            lamda = state[3][ms_id][0]
             mu = self.env.MS_list[ms_id].mu * (self.env.ms_image_list[ms_id]+delta-self.offset)
             ro = lamda / (mu + 1e-6)
 
