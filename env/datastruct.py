@@ -51,15 +51,13 @@ class MSInstance(object):
                 max_cpu: int = config.ms_max_cpu_resource,
                 min_memory: int = config.ms_min_memory_resource,
                 max_memory: int = config.ms_max_memory_resource,
-                min_lamda: int = config.ms_min_lamda,
-                max_lamda: int = config.ms_max_lamda,
                 min_mu: int = config.ms_min_mu,
                 max_mu: int = config.ms_max_mu
         ) -> None:
         self.id = id
         self.cpu = random.randint(min_cpu, max_cpu)
         self.memory = random.randint(min_memory, max_memory)
-        self.lamda = random.uniform(min_lamda, max_lamda)
+        self.lamda = 0   # 通过request.lamda来更新
         self.mu = random.randint(min_mu, max_mu)
 
     def __eq__(self, other):
@@ -82,12 +80,17 @@ class Request(object):
                 min_chain_length = config.min_request_chain_length,
                 max_chain_length = config.max_request_chain_length,
                 min_request_T = config.min_request_T,
-                max_request_T = config.max_request_T
+                max_request_T = config.max_request_T,
+                min_lamda: int = config.ms_min_lamda,
+                max_lamda: int = config.ms_max_lamda,
         ) -> None:
         self.id = id
         self.length = random.randint(min_chain_length, max_chain_length)
         self.T_max = min_request_T + (max_request_T-min_request_T)*(self.length-min_chain_length)/(max_chain_length-min_chain_length)
         self.ms_list = random.sample(range(ms_nums), self.length)
+        self.min_lamda = min_lamda
+        self.max_lamda = max_lamda
+        self.lamda = 0
 
     def is_ms_needed(self, ms_id) -> bool:
         """ 检查请求链中是否包含该微服务 """

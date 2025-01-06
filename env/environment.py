@@ -78,9 +78,15 @@ class DataCenterEnvironment(gym.Env):
 
     def _init_deploy(self):
         """ 第一次部署 """
+        # 这里假定已知最初的到达率，以确定一个合理的实例数量
+        for i in range(len(self.ms_image_list)):
+            ms = self.MS_list[i]
+            self.ms_image_list[i] = int(1.2 * ms.lamda / ms.mu)
+
         init_deploy_strategy = FFD.FFD(self.MS_list, self.ms_image_list, self.Node_list, self.state)
         self.state, self.Node_list = init_deploy_strategy.deploy()
-        pass
+        
+        return self.ms_image_list
 
     def get_state(self):
         """ 返回状态副本，防止返回引用被外部修改 """
@@ -96,16 +102,16 @@ class DataCenterEnvironment(gym.Env):
 
         return res
 
-    def _generate_ms(self, n_ms):
+    def _generate_ms(self, n_ms) -> list[MSInstance]:
         """ 生成各种微服务 """
         return [MSInstance(i) for i in range(n_ms)]
 
-    def _generate_request_flow(self):
+    def _generate_request_flow(self) -> list[Request]:
         """ 生成各种请求流 """
         num_requests = self.request_flow_nums
         return [Request(i) for i in range(num_requests)]
 
-    def _generate_node(self, n_node_server):
+    def _generate_node(self, n_node_server) -> list[Node]:
         """ 生成各种服务器节点 """
         return [Node(i) for i in range(n_node_server)]
     
@@ -375,11 +381,17 @@ class DataCenterEnvironment(gym.Env):
 
         return lamda_list
 
-    def _update_arrival_rate(self, request_lamda):
+    def _update_arrival_rate(self, request_lamda, request_flow_list: list[Request]):
         """ 更新请求到达率 """
+        # 清零
         for ms in self.MS_list:
-            ms.lamda = request_lamda + np.random.uniform(self.config.ms_min_lamda, self.config.ms_max_lamda)
-        pass
+            ms.lamda = 0
+
+        # 线性更新
+        for request in request_flow_list:
+            request.lamda = request_lamda + np.random.uniform(request.min_lamda, request.max_lamda)
+            for ms_idx in request.ms_list:
+                self.MS_list[ms_idx].lamda += request.lamda
 
     def _cal_cost(self, ns, nodes):
         """ 计算开销 """
@@ -425,15 +437,17 @@ class DataCenterEnvironment(gym.Env):
         self._reset_seed(seed)
         self.timeslot.reset()   # 重置时间
         self._reset_datastruct()    # 重置各数据结构
-        self._init_deploy()     # 第一次部署
-        self.request_lamda_list = read_data(self.config.data_path)
+        self.request_lamda_list = np.divide(read_data(self.config.data_path), 5).tolist()
         self.predicter.reset(self.request_lamda_list[0])    # 假定知道第一个到达率，让绘图美观一些
 
         # 初始到达率
-        self._update_arrival_rate(self.request_lamda_list[0])
+        self._update_arrival_rate(self.request_lamda_list[0], self.RequestFlow_list)
 
         # 预测一个初始值
         self._update_state_lamda(self.predicter.predict())
+
+        # 初次部署
+        init_ms_image_num_list = self._init_deploy()
 
         observation = self.get_observation()
 
@@ -474,7 +488,7 @@ class DataCenterEnvironment(gym.Env):
 
         # 更新下一时隙的到达率
         lamda = self.request_lamda_list.pop(0)
-        self._update_arrival_rate(lamda)
+        self._update_arrival_rate(lamda, self.RequestFlow_list)
 
         done = self.timeslot.is_end()
         observation = self.get_observation()
