@@ -65,7 +65,9 @@ class GDCScalingAgent(object):
 
                 # 集群资源不足
                 if node is None:
-                    raise ValueError(f"The total resource is not enough to scale ms.{ms.id}!")
+                    # raise ValueError(f"The total resource is not enough to scale ms.{ms.id}!")
+                    print(f"The total resource is not enough to scale ms.{ms.id}!")
+                    return action
 
                 # 更新action
                 action[ms.id][node.id] += 1
@@ -86,7 +88,9 @@ class GDCScalingAgent(object):
 
                 # 集群资源不足
                 if node is None:
-                    raise ValueError(f"The total resource is not enough to scale ms.{ms.id}!")
+                    # raise ValueError(f"The total resource is not enough to scale ms.{ms.id}!")
+                    print(f"The total resource is not enough to scale ms.{ms.id}!")
+                    return action
 
                 # 更新action
                 action[ms.id][node.id] += -1
