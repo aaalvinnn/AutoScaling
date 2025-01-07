@@ -88,7 +88,7 @@ class DataCenterEnvironment(gym.Env):
         # 这里假定已知最初的到达率，以确定一个合理的实例数量
         for i in range(len(self.ms_image_list)):
             ms = self.MS_list[i]
-            self.ms_image_list[i] = int(1.2 * ms.lamda / ms.mu)
+            self.ms_image_list[i] = int(1.5 * ms.lamda / ms.mu)
 
         init_deploy_strategy = FFD.FFD(self.MS_list, self.ms_image_list, self.Node_list, self.state)
         self.state, self.Node_list = init_deploy_strategy.deploy()

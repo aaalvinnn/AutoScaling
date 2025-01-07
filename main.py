@@ -49,10 +49,10 @@ class TestHelper(object):
 if __name__ == '__main__':
     env_config = config.EnvConfig()
     predicter = Predicter.SMAPredictor(env_config.ms_nums, env_config.predicter_window_size)
-    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
+    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(2)]
     agents = [NoScaling.NoScalingAgent(envs[0]),
-              RandomScaling.RandomScalingAgent(envs[1]),
-              GDCScaling.GDCScalingAgent(envs[2])]
-    logger = loghelper.LogHelper(["NoScaling", "Random", "GDC"])
+            #   RandomScaling.RandomScalingAgent(envs[1]),
+              GDCScaling.GDCScalingAgent(envs[1])]
+    logger = loghelper.LogHelper(["NoScaling", "GDC"])
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()

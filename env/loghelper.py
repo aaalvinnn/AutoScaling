@@ -29,7 +29,7 @@ class LogHelper(object):
                         "request_success_rate": "",
                         "r": "",
                     }
-        self.save_path = os.path.join("test_output", datetime.now().strftime("%m%d%H%M%S"))
+        self.save_path = os.path.join("test_output", datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"))
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
         

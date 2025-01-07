@@ -129,7 +129,7 @@ class PPOAgent(object):
         self.optimizer = optim.Adam(self.actorcrtic.parameters(), lr=config.lr, eps=1e-5)
 
     def save(self, path, name):
-        save_path = os.path.join(path, datetime.now().strftime("%H%M%S"), f"{name}.pth")
+        save_path = os.path.join(path, name)
         if not os.path.exists(os.path.dirname(save_path)):
             os.makedirs(os.path.dirname(save_path))
         
@@ -157,6 +157,7 @@ def store_next_obs(obs: list, next_obs: tuple, step: int):
 
 def train(agent: PPOAgent):
     CONFIG = config.EnvConfig()
+    save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"))
     writer = SummaryWriter(f"runs/0107/PPO_cnn")
 
     # TRY NOT TO MODIFY: seeding
@@ -337,10 +338,10 @@ def train(agent: PPOAgent):
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-        agent.save(CONFIG.model_path, "model_cnn")
+        agent.save(save_path, "model_cnn")
         if best_reward < np.sum(total_reward):
             best_reward = np.sum(total_reward)
-            agent.save(CONFIG.model_path, "model_cnn_best")
+            agent.save(save_path, "model_cnn_best")
 
     envs.close()
     writer.close()

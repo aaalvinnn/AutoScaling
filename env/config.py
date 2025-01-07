@@ -65,7 +65,7 @@ class EnvConfig:
 
         # 训练配置
         self.device = "cpu"
-        self.model_path = "model/0107/"
+        self.model_path = "model"
         self.num_steps = self.time_slot_end - self.time_slot_start
         self.num_envs = 1
         self.batch_size = int(self.num_envs * self.num_steps)
