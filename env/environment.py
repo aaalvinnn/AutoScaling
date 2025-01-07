@@ -34,6 +34,9 @@ class DataCenterEnvironment(gym.Env):
         self.MS2MS_data_graph = None
         # 请求流预测器
         self.predicter = Predicter.SMAPredictor(self.ms_nums, self.config.predicter_window_size)
+        # 开销
+        self.C = self.config.C
+        self.Qt = None  # 积压量
         # 动作、状态空间
         self.state = None   # to be filled in reset()
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(5, self.ms_nums, self.server_node_nums), dtype=np.float32)
@@ -56,12 +59,16 @@ class DataCenterEnvironment(gym.Env):
         self.Node_list = self._generate_node(self.server_node_nums)
         # 用户请求流种类列表
         self.RequestFlow_list = self._generate_request_flow()
+        # 初始化请求流到达率的随机数生成矩阵
+        self.lamda_random_matrix = np.random.uniform(self.config.ms_min_lamda, self.config.ms_max_lamda, (self.request_flow_nums, self.timeslot.get_slot_length()))
         # 节点间带宽图
         self.Node2Node_bandwidth_graph = self._generate_node2node_bandwidth_graph(self.server_node_nums)
         # 微服务间依赖数据大小图
         self.MS2MS_data_graph = self._generate_ms2ms_data_graph(self.ms_nums)
         # 初始化微服务实例镜像数量
         self.ms_image_list = copy.deepcopy(self.config.init_ms_image_list)
+        # 初始化开销积压量Q(t)
+        self.Qt = 0
         # 服务器微服务实例部署情况、CPU剩余资源、内存剩余资源、预测的请求到达率
         self.state = {
             "deploy_info": np.zeros((self.ms_nums, self.server_node_nums)),
@@ -266,6 +273,9 @@ class DataCenterEnvironment(gym.Env):
             for node in self.Node_list:
                 image_num = int(image_num_list[node.id])
                 lamda = ms.lamda * image_num / np.sum(image_num_list)   # 根据概率路由进行分流
+                if np.sum(image_num_list) == 0:
+                    raise ValueError(f"Image num list {image_num_list} is not valid!")
+                
                 if lamda == 0:
                     continue
 
@@ -381,17 +391,21 @@ class DataCenterEnvironment(gym.Env):
 
         return lamda_list
 
-    def _update_arrival_rate(self, request_lamda, request_flow_list: list[Request]):
+    def _update_arrival_rate(self, request_lamda, request_flow_list: list[Request], lamda_random_matrix):
         """ 更新请求到达率 """
         # 清零
         for ms in self.MS_list:
             ms.lamda = 0
 
         # 线性更新
-        for request in request_flow_list:
-            request.lamda = request_lamda + np.random.uniform(request.min_lamda, request.max_lamda)
+        for i, request in enumerate(request_flow_list):
+            request.lamda = (request_lamda + lamda_random_matrix[i, self.timeslot.get_now()]) / 3
             for ms_idx in request.ms_list:
                 self.MS_list[ms_idx].lamda += request.lamda
+
+    def _update_Qt(self, cost):
+        self.Qt = max(self.Qt+cost-self.C, 0)
+        return self.Qt
 
     def _cal_cost(self, ns, nodes):
         """ 计算开销 """
@@ -437,11 +451,11 @@ class DataCenterEnvironment(gym.Env):
         self._reset_seed(seed)
         self.timeslot.reset()   # 重置时间
         self._reset_datastruct()    # 重置各数据结构
-        self.request_lamda_list = np.divide(read_data(self.config.data_path), 5).tolist()
+        self.request_lamda_list = read_data(self.config.data_path)
         self.predicter.reset(self.request_lamda_list[0])    # 假定知道第一个到达率，让绘图美观一些
 
         # 初始到达率
-        self._update_arrival_rate(self.request_lamda_list[0], self.RequestFlow_list)
+        self._update_arrival_rate(self.request_lamda_list[0], self.RequestFlow_list, self.lamda_random_matrix)
 
         # 预测一个初始值
         self._update_state_lamda(self.predicter.predict())
@@ -465,47 +479,54 @@ class DataCenterEnvironment(gym.Env):
         ns, penalty = self._update_deployed_state(action)
 
         # 在每个时隙结束时从环境采样和统计信息
+
         t_total_list, t_exe_list, t_route_list = self.cal_total_access_delay(self.state["deploy_info"])
         node_using_num = self._cal_node_using_num()
         cost = self._cal_cost(ns, node_using_num)
+        Qt = self._update_Qt(cost)
+        request_success_rate = self._cal_request_success_rate(t_total_list)
         vload = self._cal_load_variance(0.5)
         ave_ro = self._cal_average_service_intensity()
-        request_success_rate = self._cal_request_success_rate(t_total_list)
+        
 
         # 状态转移
         self.timeslot.add_time()
         # reward = 目标函数 + 异常动作惩罚 + 请求成功率奖励
-        reward = - (self.config.w_ns_and_delay * cost + (1-self.config.w_ns_and_delay) * np.mean(t_total_list)) \
-                + penalty \
-                + 50 * request_success_rate
+        y = (self.config.w_ns_and_delay * (cost*Qt) + (1-self.config.w_ns_and_delay) * np.mean(t_total_list))
+        reward = -  y + penalty + 100 * request_success_rate
 
         # 在该时隙结束时，收集统计本时隙到达率
         lamda_list = self._cal_lamda_list()
         self.predicter.record(lamda_list)
 
-        # 预测下一时隙的到达率
-        self._update_state_lamda(self.predicter.predict())
-
-        # 更新下一时隙的到达率
-        lamda = self.request_lamda_list.pop(0)
-        self._update_arrival_rate(lamda, self.RequestFlow_list)
-
         done = self.timeslot.is_end()
+
+        if not done:
+            # 预测下一时隙的到达率
+            self._update_state_lamda(self.predicter.predict())
+
+            # 更新下一时隙的到达率
+            lamda = self.request_lamda_list.pop(0)
+            self._update_arrival_rate(lamda, self.RequestFlow_list, self.lamda_random_matrix)
+
         observation = self.get_observation()
 
         # extra info
         info = {
+            "y": y,
             "t_all": np.mean(t_total_list),
             "t_exe": np.mean(t_exe_list),
             "t_route": np.mean(t_route_list),
             "vload": vload,
             "ns": ns,
             "cost": cost,
+            "Qt": Qt,
             "penalty": penalty/self.config.penalty,
             "node_using_num": node_using_num,
             "image_nums": np.sum(self.ms_image_list),
             "predict_lamda": np.mean(self.predicter.predict()),
             "lamda": np.mean(lamda_list),
+            "lamda_list": lamda_list,
             "ave_ro": ave_ro,
             "request_success_rate": request_success_rate,
             "r": reward

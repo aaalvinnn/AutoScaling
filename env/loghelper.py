@@ -11,12 +11,14 @@ class LogHelper(object):
         self.agents_name = agents
         self.data = {f"{agent}": defaultdict(list) for agent in self.agents_name}
         self.ylabel_metrics = {
+                        "y": "",
                         "t_all": "ms",
                         "t_exe": "ms",
                         "t_route": "ms",
                         "vload": "",
                         "ns": "",
                         "cost": "",
+                        "Qt": "",
                         "penalty": "",
                         "node_using_num": "",
                         "image_nums": "",
