@@ -178,10 +178,15 @@ class PPOAgent(object):
         load_path = os.path.join(path, "model_multi.pth")
         self.actorcrtic.load_state_dict(torch.load(load_path))
 
-    def predict(self, ob):
+    def get_action(self, ob):
+        """
+        predict, 供test对比实验调用，不在训练中被调用
+        """
         # self.actorcrtic.eval()
+        ob = torch.Tensor(ob).unsqueeze(0)
         action, _, _, _ = self.actorcrtic.get_action_and_value(ob)
-        return action.cpu().numpy().T
+        action = action.cpu().numpy()[0]
+        return action
 
 def make_env(env_id, config):
     def thunk():
@@ -374,10 +379,10 @@ def train(agent: PPOAgent):
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-        agent.save(CONFIG.model_path, "model_mi")
+        agent.save(CONFIG.model_path, "model_mi.pth")
         if best_reward < np.sum(total_reward):
             best_reward = np.sum(total_reward)
-            agent.save(CONFIG.model_path, "model_mi_best")
+            agent.save(CONFIG.model_path, "model_mi_best.pth")
 
     envs.close()
     writer.close()

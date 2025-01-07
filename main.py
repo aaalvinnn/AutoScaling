@@ -1,5 +1,5 @@
 from env import config, environment, loghelper
-from methods import NoScaling, RandomScaling, GDCScaling
+from methods import NoScaling, RandomScaling, GDCScaling, PPO_cnn
 from methods import Predicter
 import random
 import numpy as np
@@ -49,10 +49,13 @@ class TestHelper(object):
 if __name__ == '__main__':
     env_config = config.EnvConfig()
     predicter = Predicter.SMAPredictor(env_config.ms_nums, env_config.predicter_window_size)
-    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(2)]
+    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
+    ppoAgent = PPO_cnn.PPOAgent(envs[2], env_config)
+    # ppoAgent.load("model/0107/184309")
     agents = [NoScaling.NoScalingAgent(envs[0]),
             #   RandomScaling.RandomScalingAgent(envs[1]),
-              GDCScaling.GDCScalingAgent(envs[1])]
-    logger = loghelper.LogHelper(["NoScaling", "GDC"])
+              GDCScaling.GDCScalingAgent(envs[1]),
+              ppoAgent]
+    logger = loghelper.LogHelper(["NoScaling", "GDC", "DRL"])
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()
