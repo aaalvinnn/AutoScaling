@@ -2,7 +2,8 @@ from environment import DataCenterEnvironment
 from collections import defaultdict
 from matplotlib import pyplot as plt
 from env import config
-
+from datetime import datetime
+import os
 
 env_config = config.EnvConfig() 
 class LogHelper(object):
@@ -21,12 +22,15 @@ class LogHelper(object):
                         "image_nums": "",
                         "predict_lamda": "rts",
                         "lamda": "rts",
-                        "lamda": "requests/ts",
+                        "lamda_list": "rts",
                         "ave_ro": "",
                         "request_success_rate": "",
                         "r": "",
                     }
-
+        self.save_path = os.path.join("test_output", datetime.now().strftime("%m%d%H%M%S"))
+        if not os.path.exists(self.save_path):
+            os.makedirs(self.save_path)
+        
     def record(self, infos):
         if len(infos) != len(self.agents_name):
             raise ValueError(f"The length of infos {len(infos)} is not equal to the length of agents name {self.agents_name}")
@@ -48,3 +52,4 @@ class LogHelper(object):
             plt.grid(True)
             plt.tight_layout()
             plt.show()
+            plt.savefig(os.path.join(self.save_path, f"{metric}.png"))
