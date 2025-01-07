@@ -2,6 +2,7 @@
 import os
 import random
 import time
+from datetime import datetime
 from dataclasses import dataclass
 import copy
 
@@ -69,7 +70,7 @@ class ActorCritic(nn.Module):
 
         # Shared feature extractor
         self.shared_feature = nn.Sequential(
-            layer_init(nn.Linear(cnn_output_size*2 + 64*3, 256)),
+            layer_init(nn.Linear(cnn_output_size + 64*3, 256)),
             nn.ReLU(),
         )
 
@@ -83,27 +84,42 @@ class ActorCritic(nn.Module):
             layer_init(nn.Linear(256, 1)),
         )
 
+    def _standardize_state(self, ob) -> torch.Tensor:
+        """ 标准化状态，支持批次形状 """
+        res = copy.deepcopy(ob)
+        res[:, 0] = ob[:, 0] / min(
+            CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
+            CONFIG.node_min_memory_resource / CONFIG.ms_min_memory_resource
+        )
+        res[:, 1] = ob[:, 1] / CONFIG.node_max_cpu_resource
+        res[:, 2] = ob[:, 2] / CONFIG.node_max_memory_resource
+        res[:, 3] = (ob[:, 3] / CONFIG.estimated_max_lamda)
+        
+        return res
+    
     def get_value(self, ob):
+        # standardize state
+        ob = self._standardize_state(ob)
         # Process CNN and MLP inputs
         deploy_features = self.cnn(ob[:,0,:,:].unsqueeze(1))
         cpu_features = self.mlp_cpu(ob[:,1,0,:])
         mem_features = self.mlp_mem(ob[:,2,0,:])
         lamda_features = self.mlp_lamda(ob[:,3,:,0])
-        ms2ms_data_features = self.cnn(ob[:,4,:,:].unsqueeze(1))
-        combined_features = torch.cat([deploy_features, cpu_features, mem_features, lamda_features, ms2ms_data_features], dim=-1)
+        combined_features = torch.cat([deploy_features, cpu_features, mem_features, lamda_features], dim=-1)
 
         # Extract shared features
         shared_features = self.shared_feature(combined_features)
         return self.critic(shared_features)
 
     def get_action_and_value(self, ob, action=None):
+        # standardize state
+        ob = self._standardize_state(ob)
         # Process CNN and MLP inputs
         deploy_features = self.cnn(ob[:,0,:,:].unsqueeze(1))
         cpu_features = self.mlp_cpu(ob[:,1,0,:])
         mem_features = self.mlp_mem(ob[:,2,0,:])
         lamda_features = self.mlp_lamda(ob[:,3,:,0])
-        ms2ms_data_features = self.cnn(ob[:,4,:,:].unsqueeze(1))
-        combined_features = torch.cat([deploy_features, cpu_features, mem_features, lamda_features, ms2ms_data_features], dim=-1)
+        combined_features = torch.cat([deploy_features, cpu_features, mem_features, lamda_features], dim=-1)
 
         # Extract shared features
         shared_features = self.shared_feature(combined_features)
@@ -151,11 +167,11 @@ class PPOAgent(object):
         self.actorcrtic = ActorCritic(env.server_node_nums, env.ms_nums, config.max_instance_update_num).to(CONFIG.device)
         self.optimizer = optim.Adam(self.actorcrtic.parameters(), lr=config.lr, eps=1e-5)
 
-    def save(self, path):
-        if not os.path.exists(os.path.dirname(path)):
-            os.makedirs(os.path.dirname(path))
+    def save(self, path, name):
+        save_path = os.path.join(path, datetime.now().strftime("%H%M%S"), f"{name}.pth")
+        if not os.path.exists(os.path.dirname(save_path)):
+            os.makedirs(os.path.dirname(save_path))
         
-        save_path = os.path.join(path, "model_multi.pth")
         torch.save(self.actorcrtic.state_dict(), save_path)
     
     def load(self, path):
@@ -176,7 +192,7 @@ def make_env(env_id, config):
 
 def train(agent: PPOAgent):
     CONFIG = config.EnvConfig()
-    writer = SummaryWriter(f"runs/0103/PPO_multi_input")
+    writer = SummaryWriter(f"runs/0107/PPO_multi_input")
 
     # TRY NOT TO MODIFY: seeding
     random.seed(CONFIG.seed)
@@ -200,9 +216,12 @@ def train(agent: PPOAgent):
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
+    best_reward = 0
 
     for iteration in range(1, CONFIG.num_iterations + 1):
         total_reward = []
+        total_y = []
+        total_Qt = []
         total_delay = {"t_all": [], "t_exe": [], "t_route": []}
         total_vload = []
         total_ns = []
@@ -234,6 +253,8 @@ def train(agent: PPOAgent):
             next_done = torch.Tensor(next_done).to(CONFIG.device)
 
             total_reward.append(np.mean(reward))
+            total_y.append(np.mean(infos['y']))
+            total_Qt.append(np.mean(infos['Qt']))
             total_delay["t_all"].append(np.mean(infos['t_all']))
             total_delay["t_exe"].append(np.mean(infos['t_exe']))
             total_delay["t_route"].append(np.mean(infos['t_route']))
@@ -248,6 +269,8 @@ def train(agent: PPOAgent):
             if terminations[0]:
                 print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
                 writer.add_scalar("charts/reward", np.sum(total_reward), iteration)
+                writer.add_scalar("charts/y", np.mean(total_y), iteration)
+                writer.add_scalar("charts/Qt", np.mean(total_Qt), iteration)
                 writer.add_scalar("charts/t_all", np.mean(total_delay["t_all"]), iteration)
                 writer.add_scalar("charts/t_exe", np.mean(total_delay["t_exe"]), iteration)
                 writer.add_scalar("charts/t_route", np.mean(total_delay["t_route"]), iteration)
@@ -350,7 +373,10 @@ def train(agent: PPOAgent):
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-        agent.save(CONFIG.model_path)
+        agent.save(CONFIG.model_path, "model_mi")
+        if best_reward < np.sum(total_reward):
+            best_reward = np.sum(total_reward)
+            agent.save(CONFIG.model_path, "model_mi_best")
 
     envs.close()
     writer.close()

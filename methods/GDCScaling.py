@@ -13,8 +13,8 @@ class GDCScalingAgent(object):
         self.actoin_space_dim = np.zeros((self.env.ms_nums, self.env.server_node_nums), dtype=int)
         self.offset = self.env.config.max_instance_update_num
         self.Um = copy.deepcopy(self.env.Node_list)     # 虚拟节点列表，用于判断资源使用情况
-        self.ro_max = 0.75
-        self.ro_min = 0.5
+        self.ro_max = 0.6
+        self.ro_min = 0.3
         
     def greedy_device_chosen(self, m, Um, pre_deploy_info, delta):
         """
@@ -36,6 +36,7 @@ class GDCScalingAgent(object):
                 delpoy_info = copy.deepcopy(pre_deploy_info)
                 delpoy_info[m.id][d.id] += delta
                 # 计算路由时延、处理和排队时延等总时延
+                # TODO 这里相当于运行了一次仿真，是不对的
                 tau = np.mean(self.env.cal_total_access_delay(delpoy_info)[0])
 
                 if tau < tau_min:

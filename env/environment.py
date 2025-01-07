@@ -39,7 +39,7 @@ class DataCenterEnvironment(gym.Env):
         self.Qt = None  # 积压量
         # 动作、状态空间
         self.state = None   # to be filled in reset()
-        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(5, self.ms_nums, self.server_node_nums), dtype=np.float32)
+        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(4, self.ms_nums, self.server_node_nums), dtype=np.float32)
         self.action_space = gym.spaces.Tuple((
             gym.spaces.Discrete(self.server_node_nums),
             gym.spaces.Discrete(self.ms_nums),

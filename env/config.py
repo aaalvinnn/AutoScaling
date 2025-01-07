@@ -23,7 +23,7 @@ class EnvConfig:
         # 微服务配置
         self.ms_nums = 10
         self.init_ms_image_list = [3 for _ in range(self.ms_nums)]    # 初始的各个微服务实例数量
-        self.max_instance_update_num = 2
+        self.max_instance_update_num = 5
         self.ms_min_cpu_resource = 1
         self.ms_max_cpu_resource = 2
         self.ms_min_memory_resource = 10
@@ -48,7 +48,7 @@ class EnvConfig:
 
         # 开销
         self.cost_w_list = (0.1, 0.3, 0.6)
-        self.C = 50     # 服务提供商给出的时间平均长期开销预算
+        self.C = 100     # 服务提供商给出的时间平均长期开销预算
 
         # 模型、算法配置
         self.predicter_window_size = 5
@@ -67,7 +67,7 @@ class EnvConfig:
         self.device = "cpu"
         self.model_path = "model/0107/"
         self.num_steps = self.time_slot_end - self.time_slot_start
-        self.num_envs = 4
+        self.num_envs = 1
         self.batch_size = int(self.num_envs * self.num_steps)
         self.num_minibatches = 4
         self.minibatch_size = int(self.batch_size // self.num_minibatches)
@@ -77,6 +77,6 @@ class EnvConfig:
 
         # 奖励配置
         self.penalty = -100
-        self.w_ns_and_delay = 0.3
+        self.w_ns_and_delay = 0.1
 
 

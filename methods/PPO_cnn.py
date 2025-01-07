@@ -2,6 +2,7 @@
 import os
 import random
 import time
+from datetime import datetime
 from dataclasses import dataclass
 import copy
 
@@ -37,13 +38,13 @@ class ActorCritic(nn.Module):
         self.delta = max_delta*2+1
 
         # CNN for processing deploy_info
-        cnn_output_size = (self.ms_nums-3) * (self.node_nums-3) * 64
+        cnn_output_size = (self.ms_nums-6) * (self.node_nums-6) * 64
         self.cnn = nn.Sequential(
-            layer_init(nn.Conv2d(5, 16, kernel_size=2, stride=1)),
+            layer_init(nn.Conv2d(4, 16, kernel_size=3, stride=1)),
             nn.ReLU(),
-            layer_init(nn.Conv2d(16, 32, kernel_size=2, stride=1)),
+            layer_init(nn.Conv2d(16, 32, kernel_size=3, stride=1)),
             nn.ReLU(),
-            layer_init(nn.Conv2d(32, 64, kernel_size=2, stride=1)),
+            layer_init(nn.Conv2d(32, 64, kernel_size=3, stride=1)),
             nn.ReLU(),
             nn.Flatten(),
             layer_init(nn.Linear(cnn_output_size, 256)),
@@ -60,11 +61,28 @@ class ActorCritic(nn.Module):
             layer_init(nn.Linear(256, 1)),
         )
 
+    def _standardize_state(self, ob) -> torch.Tensor:
+        """ 标准化状态，支持批次形状 """
+        res = copy.deepcopy(ob)
+        res[:, 0] = ob[:, 0] / min(
+            CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
+            CONFIG.node_min_memory_resource / CONFIG.ms_min_memory_resource
+        )
+        res[:, 1] = ob[:, 1] / CONFIG.node_max_cpu_resource
+        res[:, 2] = ob[:, 2] / CONFIG.node_max_memory_resource
+        res[:, 3] = (ob[:, 3] / CONFIG.estimated_max_lamda)
+        
+        return res
+
     def get_value(self, ob):
+        # Standardize state
+        ob = self._standardize_state(ob)
         features = self.cnn(ob)
         return self.critic(features)
 
     def get_action_and_value(self, ob, action=None):
+        # Standardize state
+        ob = self._standardize_state(ob)
         # Process CNN inputs
         features = self.cnn(ob)
 
@@ -102,7 +120,6 @@ class ActorCritic(nn.Module):
 
         return action, logprob, entropy, self.critic(features)
 
-
 class PPOAgent(object):
     def __init__(self, env: environment.DataCenterEnvironment, config: config.EnvConfig):
         # Basic config
@@ -111,11 +128,11 @@ class PPOAgent(object):
         self.actorcrtic = ActorCritic(env.server_node_nums, env.ms_nums, config.max_instance_update_num).to(CONFIG.device)
         self.optimizer = optim.Adam(self.actorcrtic.parameters(), lr=config.lr, eps=1e-5)
 
-    
-    def save(self, path):
-        if not os.path.exists(os.path.dirname(path)):
-            os.makedirs(os.path.dirname(path))
-        save_path = os.path.join(path, "model_cnn.pth")
+    def save(self, path, name):
+        save_path = os.path.join(path, datetime.now().strftime("%H%M%S"), f"{name}.pth")
+        if not os.path.exists(os.path.dirname(save_path)):
+            os.makedirs(os.path.dirname(save_path))
+        
         torch.save(self.actorcrtic.state_dict(), save_path)
 
     def load(self, path):
@@ -140,7 +157,7 @@ def store_next_obs(obs: list, next_obs: tuple, step: int):
 
 def train(agent: PPOAgent):
     CONFIG = config.EnvConfig()
-    writer = SummaryWriter(f"runs/0103/PPO_cnn")
+    writer = SummaryWriter(f"runs/0107/PPO_cnn")
 
     # TRY NOT TO MODIFY: seeding
     random.seed(CONFIG.seed)
@@ -148,7 +165,6 @@ def train(agent: PPOAgent):
     torch.manual_seed(CONFIG.seed)
     torch.backends.cudnn.deterministic = True
 
-    predicter = Predicter.SMAPredictor(CONFIG.ms_nums, CONFIG.predicter_window_size)
     envs = gym.vector.SyncVectorEnv(
         [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
     )
@@ -164,9 +180,12 @@ def train(agent: PPOAgent):
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
+    best_reward = 0
 
     for iteration in range(1, CONFIG.num_iterations + 1):
         total_reward = []
+        total_y = []
+        total_Qt = []
         total_delay = {"t_all": [], "t_exe": [], "t_route": []}
         total_vload = []
         total_ns = []
@@ -198,6 +217,8 @@ def train(agent: PPOAgent):
             next_done = torch.Tensor(next_done).to(CONFIG.device)
 
             total_reward.append(np.mean(reward))
+            total_y.append(np.mean(infos['y']))
+            total_Qt.append(np.mean(infos['Qt']))
             total_delay["t_all"].append(np.mean(infos['t_all']))
             total_delay["t_exe"].append(np.mean(infos['t_exe']))
             total_delay["t_route"].append(np.mean(infos['t_route']))
@@ -212,6 +233,8 @@ def train(agent: PPOAgent):
             if terminations[0]:
                 print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
                 writer.add_scalar("charts/reward", np.sum(total_reward), iteration)
+                writer.add_scalar("charts/y", np.mean(total_y), iteration)
+                writer.add_scalar("charts/Qt", np.mean(total_Qt), iteration)
                 writer.add_scalar("charts/t_all", np.mean(total_delay["t_all"]), iteration)
                 writer.add_scalar("charts/t_exe", np.mean(total_delay["t_exe"]), iteration)
                 writer.add_scalar("charts/t_route", np.mean(total_delay["t_route"]), iteration)
@@ -314,7 +337,10 @@ def train(agent: PPOAgent):
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-        agent.save(CONFIG.model_path)
+        agent.save(CONFIG.model_path, "model_cnn")
+        if best_reward < np.sum(total_reward):
+            best_reward = np.sum(total_reward)
+            agent.save(CONFIG.model_path, "model_cnn_best")
 
     envs.close()
     writer.close()
