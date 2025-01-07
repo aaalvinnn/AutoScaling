@@ -3,7 +3,7 @@ from methods import NoScaling, RandomScaling, GDCScaling
 from methods import Predicter
 import random
 import numpy as np
-import copy
+from tqdm import tqdm
 
 
 seed = 1037
@@ -16,28 +16,32 @@ class TestHelper(object):
         self.envs = envs
         self.logger = logger
 
-    def test(self):
+    def test(self, total_steps=288):
         total_rewards = [0 for _ in self.agents]
         dones = [False for _ in self.agents]
         states = [env.reset()[0] for env in self.envs]
         infos = [{} for _ in self.agents]
 
-        while not all(dones):
-            for i, (agent, env) in enumerate(zip(self.agents, self.envs)):
-                if not dones[i]:  # Skip if this agent's environment is already done
-                    action = agent.get_action(states[i])
-                    next_state, reward, done, _, info = env.step(action)
+        with tqdm(total=total_steps, desc="Epoch Progress", unit="step") as pbar:
+            while not all(dones):
+                for i, (agent, env) in enumerate(zip(self.agents, self.envs)):
+                    if not dones[i]:  # Skip if this agent's environment is already done
+                        action = agent.get_action(states[i])
+                        next_state, reward, done, _, info = env.step(action)
 
-                    total_rewards[i] += reward
-                    states[i] = next_state
-                    dones[i] = done
-                    infos[i] = info
+                        total_rewards[i] += reward
+                        states[i] = next_state
+                        dones[i] = done
+                        infos[i] = info
 
-            self.logger.record(infos)
+                # update progress bar
+                pbar.update(1)
 
-        # Log total rewards for each agent
-        for agent, total_reward in zip(self.agents, total_rewards):
-            print(f"Agent {agent} total_reward: {total_reward}")
+                self.logger.record(infos)
+
+            # Log total rewards for each agent
+            for agent, total_reward in zip(self.agents, total_rewards):
+                print(f"Agent {agent} total_reward: {total_reward}")
 
         self.logger.visualize()
 
@@ -52,6 +56,3 @@ if __name__ == '__main__':
     logger = loghelper.LogHelper(["NoScaling", "Random", "GDC"])
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()
-
-        
-
