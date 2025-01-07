@@ -58,6 +58,8 @@ class FFD:
         
         # 遍历所有微服务，进行部署
         for ms in ms_list:
+            if ms.lamda == 0:
+                continue
             image_num = self.ms_image_list[ms.id]
             self._update_deploy_state(ms, image_num)
         
