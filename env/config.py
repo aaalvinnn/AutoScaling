@@ -23,7 +23,7 @@ class EnvConfig:
         # 微服务配置
         self.ms_nums = 10
         self.init_ms_image_list = [3 for _ in range(self.ms_nums)]    # 初始的各个微服务实例数量
-        self.max_instance_update_num = 5
+        self.max_instance_update_num = 2
         self.ms_min_cpu_resource = 1
         self.ms_max_cpu_resource = 2
         self.ms_min_memory_resource = 10
@@ -40,7 +40,7 @@ class EnvConfig:
         self.request_flow_nums = 5
         self.min_request_chain_length = 3
         self.max_request_chain_length = 8
-        self.estimated_max_lamda = 30
+        self.estimated_max_lamda = 10
         self.init_lamda = 15
         self.min_request_T = 30     # 最大请求时延约束
         self.max_request_T = 80     # 最大请求时延约束
@@ -67,7 +67,7 @@ class EnvConfig:
         self.device = "cpu"
         self.model_path = "model"
         self.num_steps = self.time_slot_end - self.time_slot_start
-        self.num_envs = 1
+        self.num_envs = 4
         self.batch_size = int(self.num_envs * self.num_steps)
         self.num_minibatches = 4
         self.minibatch_size = int(self.batch_size // self.num_minibatches)

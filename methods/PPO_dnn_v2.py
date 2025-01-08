@@ -22,7 +22,6 @@ from env import environment, config
 from methods import Predicter
 
 
-OBS_KEYS = ["deploy_info", "cpus", "memories", "lamda"]
 CONFIG = config.EnvConfig()
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -31,46 +30,27 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     return layer
 
 class ActorCritic(nn.Module):
+    """ 为避免特征长度差异对模型造成不良影响，独立特征提取后再拼接 """
     def __init__(self, node_nums, ms_nums, max_delta):
         super().__init__()
         self.node_nums = node_nums
         self.ms_nums = ms_nums
+        self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums]
+        self.hidden_num_list = [128, 64, 64, 64]
         self.delta = max_delta*2+1
 
-        # CNN for processing deploy_info
-        cnn_output_size = (self.ms_nums-3) * (self.node_nums-3) * 64
-        self.cnn = nn.Sequential(
-            layer_init(nn.Conv2d(1, 16, kernel_size=2, stride=1)),
-            nn.ReLU(),
-            layer_init(nn.Conv2d(16, 32, kernel_size=2, stride=1)),
-            nn.ReLU(),
-            layer_init(nn.Conv2d(32, 64, kernel_size=2, stride=1)),
-            nn.ReLU(),
-            nn.Flatten(),
-        )
-        
+        self.subnet_list = nn.ModuleList([
+            nn.Sequential(
+                layer_init(nn.Linear(feature_length, hidden_num)),
+                nn.ReLU(),
+            )
+            for feature_length, hidden_num in zip(self.feature_length_list, self.hidden_num_list)
+        ])
 
-        # MLP for processing cpu remaining resources
-        self.mlp_cpu = nn.Sequential(
-            layer_init(nn.Linear(self.node_nums, 64)),
+        self.dnn = nn.Sequential(
+            layer_init(nn.Linear(np.sum(self.hidden_num_list), 256)),
             nn.ReLU(),
-        )
-
-        # MLP for processing memory remaining resources
-        self.mlp_mem = nn.Sequential(
-            layer_init(nn.Linear(self.node_nums, 64)),
-            nn.ReLU(),
-        )
-
-        # MLP for processing request lamda
-        self.mlp_lamda = nn.Sequential(
-            layer_init(nn.Linear(self.ms_nums, 64)),
-            nn.ReLU(),
-        )
-
-        # Shared feature extractor
-        self.shared_feature = nn.Sequential(
-            layer_init(nn.Linear(cnn_output_size + 64*3, 256)),
+            layer_init(nn.Linear(256, 256)),
             nn.ReLU(),
         )
 
@@ -85,49 +65,57 @@ class ActorCritic(nn.Module):
         )
 
     def _standardize_state(self, ob) -> torch.Tensor:
-        """ 标准化状态，支持批次形状 """
-        res = copy.deepcopy(ob)
-        res[:, 0] = ob[:, 0] / min(
+        """ 标准化状态，支持批次形状，同时展平给DNN输入 """
+        batch_size = ob.shape[0]
+        total_features = np.sum(self.feature_length_list)
+        fl = self.feature_length_list
+        res = torch.zeros((batch_size, total_features), dtype=torch.float32, device=CONFIG.device)
+
+        res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / min(
             CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
             CONFIG.node_min_memory_resource / CONFIG.ms_min_memory_resource
         )
-        res[:, 1] = ob[:, 1] / CONFIG.node_max_cpu_resource
-        res[:, 2] = ob[:, 2] / CONFIG.node_max_memory_resource
-        res[:, 3] = (ob[:, 3] / CONFIG.estimated_max_lamda)
+        res[:, fl[0]:fl[0]+fl[1]] = ob[:, 1, 0] / CONFIG.node_max_cpu_resource
+        res[:, fl[0]+fl[1]:fl[0]+fl[1]+fl[2]] = ob[:, 2, 0] / CONFIG.node_max_memory_resource
+        res[:, fl[0]+fl[1]+fl[2]:] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
         
+        data = res.cpu().numpy()    #debug
         return res
-    
-    def get_value(self, ob):
-        # standardize state
-        ob = self._standardize_state(ob)
-        # Process CNN and MLP inputs
-        deploy_features = self.cnn(ob[:,0,:,:].unsqueeze(1))
-        cpu_features = self.mlp_cpu(ob[:,1,0,:])
-        mem_features = self.mlp_mem(ob[:,2,0,:])
-        lamda_features = self.mlp_lamda(ob[:,3,:,0])
-        combined_features = torch.cat([deploy_features, cpu_features, mem_features, lamda_features], dim=-1)
 
-        # Extract shared features
-        shared_features = self.shared_feature(combined_features)
-        return self.critic(shared_features)
+    def get_value(self, ob):
+        # Standardize state
+        x = self._standardize_state(ob)
+
+        # Subnet outputs
+        feature_chunks = torch.split(x, self.feature_length_list, dim=1)
+        subnet_outputs = []
+        for i, subnet in enumerate(self.subnet_list):
+            subnet_outputs.append(subnet(feature_chunks[i]))
+        x = torch.cat(subnet_outputs, dim=1)
+
+        # Shared features
+        x = self.dnn(x)
+
+        return self.critic(x)
 
     def get_action_and_value(self, ob, action=None):
-        # standardize state
-        ob = self._standardize_state(ob)
-        # Process CNN and MLP inputs
-        deploy_features = self.cnn(ob[:,0,:,:].unsqueeze(1))
-        cpu_features = self.mlp_cpu(ob[:,1,0,:])
-        mem_features = self.mlp_mem(ob[:,2,0,:])
-        lamda_features = self.mlp_lamda(ob[:,3,:,0])
-        combined_features = torch.cat([deploy_features, cpu_features, mem_features, lamda_features], dim=-1)
+        # Standardize state
+        x = self._standardize_state(ob)
 
-        # Extract shared features
-        shared_features = self.shared_feature(combined_features)
+        # Subnet outputs
+        feature_chunks = torch.split(x, self.feature_length_list, dim=1)
+        subnet_outputs = []
+        for i, subnet in enumerate(self.subnet_list):
+            subnet_outputs.append(subnet(feature_chunks[i]))
+        x = torch.cat(subnet_outputs, dim=1)
+
+        # Process CNN inputs
+        x = self.dnn(x)
 
         # Discrete action logits
-        logits_nodeIdx = self.actor_nodeIdx(shared_features)
-        logits_msIdx = self.actor_msIdx(shared_features)
-        logits_delta = self.actor_delta(shared_features)
+        logits_nodeIdx = self.actor_nodeIdx(x)
+        logits_msIdx = self.actor_msIdx(x)
+        logits_delta = self.actor_delta(x)
 
         # Probabilities
         probs_nodeIdx = Categorical(logits=logits_nodeIdx)
@@ -156,8 +144,7 @@ class ActorCritic(nn.Module):
         # Entropies
         entropy = probs_nodeIdx.entropy() + probs_msIdx.entropy() + probs_delta.entropy()
 
-        return action, logprob, entropy, self.critic(shared_features)
-
+        return action, logprob, entropy, self.critic(x)
 
 class PPOAgent(object):
     def __init__(self, env: environment.DataCenterEnvironment, config: config.EnvConfig):
@@ -173,9 +160,9 @@ class PPOAgent(object):
             os.makedirs(os.path.dirname(save_path))
         
         torch.save(self.actorcrtic.state_dict(), save_path)
-    
+
     def load(self, path):
-        load_path = os.path.join(path, "model_multi.pth")
+        load_path = os.path.join(path, "model_dnn_best")
         self.actorcrtic.load_state_dict(torch.load(load_path))
 
     def get_action(self, ob):
@@ -195,9 +182,13 @@ def make_env(env_id, config):
 
     return thunk
 
+def store_next_obs(obs: list, next_obs: tuple, step: int):
+    for i in range(4):
+        obs[i][step] = torch.Tensor(next_obs[i]).to(CONFIG.device)
+
 def train(agent: PPOAgent):
     CONFIG = config.EnvConfig()
-    save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"), "PPO_mi")
+    save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"), "PPO_dnn_v2")
     writer = SummaryWriter(save_path)
 
     # TRY NOT TO MODIFY: seeding
@@ -206,7 +197,6 @@ def train(agent: PPOAgent):
     torch.manual_seed(CONFIG.seed)
     torch.backends.cudnn.deterministic = True
 
-    predicter = Predicter.SMAPredictor(CONFIG.ms_nums, CONFIG.predicter_window_size)
     envs = gym.vector.SyncVectorEnv(
         [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
     )
@@ -379,10 +369,10 @@ def train(agent: PPOAgent):
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-        agent.save(save_path, "model_mi.pth")
+        agent.save(save_path, "model_dnn_v2.pth")
         if best_reward < np.sum(total_reward):
             best_reward = np.sum(total_reward)
-            agent.save(save_path, "model_mi_best.pth")
+            agent.save(save_path, "model_dnn_v2_best.pth")
 
     envs.close()
     writer.close()
@@ -391,5 +381,5 @@ def train(agent: PPOAgent):
 if __name__ == "__main__":
     _env = environment.DataCenterEnvironment(-1, CONFIG)    # 只用于定义agent，不参与实际训练
     agent = PPOAgent(_env, CONFIG)
-    # agent.load("model")
+    # agent.load("model/0103")
     train(agent)

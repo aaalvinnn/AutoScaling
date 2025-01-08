@@ -162,8 +162,8 @@ def store_next_obs(obs: list, next_obs: tuple, step: int):
 
 def train(agent: PPOAgent):
     CONFIG = config.EnvConfig()
-    save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"))
-    writer = SummaryWriter(f"runs/0107/PPO_cnn")
+    save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"), "PPO_cnn")
+    writer = SummaryWriter(save_path)
 
     # TRY NOT TO MODIFY: seeding
     random.seed(CONFIG.seed)
