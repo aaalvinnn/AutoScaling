@@ -53,5 +53,5 @@ class LogHelper(object):
             plt.legend(loc="best")
             plt.grid(True)
             plt.tight_layout()
-            plt.show()
+            # plt.show()
             plt.savefig(os.path.join(self.save_path, f"{metric}.png"))

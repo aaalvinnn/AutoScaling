@@ -52,6 +52,8 @@ class ActorCritic(nn.Module):
             nn.ReLU(),
             layer_init(nn.Linear(256, 256)),
             nn.ReLU(),
+            layer_init(nn.Linear(256, 256)),
+            nn.ReLU(),
         )
 
         # Actor heads (discrete actions)
@@ -109,7 +111,7 @@ class ActorCritic(nn.Module):
             subnet_outputs.append(subnet(feature_chunks[i]))
         x = torch.cat(subnet_outputs, dim=1)
 
-        # Process CNN inputs
+        # Process DNN inputs
         x = self.dnn(x)
 
         # Discrete action logits
@@ -162,8 +164,8 @@ class PPOAgent(object):
         torch.save(self.actorcrtic.state_dict(), save_path)
 
     def load(self, path):
-        load_path = os.path.join(path, "model_dnn_best")
-        self.actorcrtic.load_state_dict(torch.load(load_path))
+        load_path = os.path.join(path, "model_dnn_v2.pth")
+        self.actorcrtic.load_state_dict(torch.load(load_path, weights_only=True))
 
     def get_action(self, ob):
         """
@@ -197,7 +199,7 @@ def train(agent: PPOAgent):
     torch.manual_seed(CONFIG.seed)
     torch.backends.cudnn.deterministic = True
 
-    envs = gym.vector.SyncVectorEnv(
+    envs = gym.vector.AsyncVectorEnv(
         [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
     )
 

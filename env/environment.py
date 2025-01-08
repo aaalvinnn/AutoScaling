@@ -452,7 +452,7 @@ class DataCenterEnvironment(gym.Env):
         self.timeslot.reset()   # 重置时间
         self._reset_datastruct()    # 重置各数据结构
         self.request_lamda_list = read_data(self.config.data_path)
-        self.predicter.reset(self.request_lamda_list[0])    # 假定知道第一个到达率，让绘图美观一些
+        self.predicter.reset(self.request_lamda_list[0]/3)    # 假定知道第一个到达率，让绘图美观一些
 
         # 初始到达率
         self._update_arrival_rate(self.request_lamda_list[0], self.RequestFlow_list, self.lamda_random_matrix)
@@ -492,8 +492,13 @@ class DataCenterEnvironment(gym.Env):
         # 状态转移
         self.timeslot.add_time()
         # reward = 目标函数 + 异常动作惩罚 + 请求成功率奖励
-        y = (self.config.w_ns_and_delay * (cost*Qt) + (1-self.config.w_ns_and_delay) * np.mean(t_total_list))
-        reward = -  y + penalty + 100 * request_success_rate
+        y = self.config.w_ns_and_delay*(10*np.log1p(cost*Qt)) + np.mean(t_total_list)
+        reward = -y + penalty + 50 * request_success_rate
+
+        # # debug
+        # if Qt > 0:
+        #     tmp = 10 * np.log1p(cost*Qt)
+        #     pass
 
         # 在该时隙结束时，收集统计本时隙到达率
         lamda_list = self._cal_lamda_list()

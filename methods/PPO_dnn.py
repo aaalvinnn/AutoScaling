@@ -37,8 +37,10 @@ class ActorCritic(nn.Module):
         self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums]
         self.delta = max_delta*2+1
 
-        self.cnn = nn.Sequential(
+        self.dnn = nn.Sequential(
             layer_init(nn.Linear(np.sum(self.feature_length_list), 256)),
+            nn.ReLU(),
+            layer_init(nn.Linear(256, 256)),
             nn.ReLU(),
             layer_init(nn.Linear(256, 256)),
             nn.ReLU(),
@@ -77,14 +79,14 @@ class ActorCritic(nn.Module):
     def get_value(self, ob):
         # Standardize state
         ob = self._standardize_state(ob)
-        features = self.cnn(ob)
+        features = self.dnn(ob)
         return self.critic(features)
 
     def get_action_and_value(self, ob, action=None):
         # Standardize state
         ob = self._standardize_state(ob)
         # Process DNN inputs
-        features = self.cnn(ob)
+        features = self.dnn(ob)
 
         # Discrete action logits
         logits_nodeIdx = self.actor_nodeIdx(features)
@@ -171,7 +173,7 @@ def train(agent: PPOAgent):
     torch.manual_seed(CONFIG.seed)
     torch.backends.cudnn.deterministic = True
 
-    envs = gym.vector.SyncVectorEnv(
+    envs = gym.vector.AsyncVectorEnv(
         [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
     )
 

@@ -48,7 +48,7 @@ class EnvConfig:
 
         # 开销
         self.cost_w_list = (0.1, 0.3, 0.6)
-        self.C = 100     # 服务提供商给出的时间平均长期开销预算
+        self.C = 80     # 服务提供商给出的时间平均长期开销预算
 
         # 模型、算法配置
         self.predicter_window_size = 5
@@ -71,12 +71,12 @@ class EnvConfig:
         self.batch_size = int(self.num_envs * self.num_steps)
         self.num_minibatches = 4
         self.minibatch_size = int(self.batch_size // self.num_minibatches)
-        self.total_epoches = 500
+        self.total_epoches = 1000
         self.total_timesteps = self.total_epoches * self.num_steps * self.num_envs
         self.num_iterations = self.total_timesteps // self.batch_size
 
         # 奖励配置
         self.penalty = -100
-        self.w_ns_and_delay = 0.1
+        self.w_ns_and_delay = 0.5
 
 
