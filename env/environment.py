@@ -172,7 +172,7 @@ class DataCenterEnvironment(gym.Env):
                 # 更新self.ms_image_list
                 self.ms_image_list[ms_idx] += delta
                 # 更新返回值
-                total_update_instance_nums += abs(delta)
+                total_update_instance_nums += delta
             else:
                 penalty += self.config.penalty
 
@@ -199,7 +199,7 @@ class DataCenterEnvironment(gym.Env):
                         # 更新self.ms_image_list
                         self.ms_image_list[ms_idx] += delta
                         # 更新返回值
-                        total_update_instance_nums += abs(delta)
+                        total_update_instance_nums += delta
                     else:
                         penalty += self.config.penalty
 
@@ -417,7 +417,7 @@ class DataCenterEnvironment(gym.Env):
     def _cal_cost(self, ns, nodes):
         """ 计算开销 """
         (w1, w2, w3) = self.config.cost_w_list
-        return w1*ns + w2*np.sum(self.ms_image_list) + w3*nodes
+        return w1*np.sum(self.ms_image_list) + w2*ns + w3*nodes
     
     def _cal_node_using_num(self):
         num = 0

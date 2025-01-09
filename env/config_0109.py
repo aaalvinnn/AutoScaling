@@ -32,8 +32,8 @@ class EnvConfig:
         self.ms_max_lamda = 3
         self.ms_min_mu = 3
         self.ms_max_mu = 5
-        self.ms2ms_min_data = 1     # 微服务间依赖数据大小
-        self.ms2ms_max_data = 5
+        self.ms2ms_min_data = 5     # 微服务间依赖数据大小
+        self.ms2ms_max_data = 10
         self.weight_cpu_and_memory = 0.1    # FFD对资源排序时，resource = cpu + weight_cpu_and_memory * memory，以平衡数值
 
         # 用户、请求链配置
@@ -42,18 +42,18 @@ class EnvConfig:
         self.max_request_chain_length = 8
         self.estimated_max_lamda = 50
         self.init_lamda = 15
-        self.min_request_T = 20     # 最大请求时延约束
-        self.max_request_T = 50     # 最大请求时延约束
+        self.min_request_T = 50     # 最大请求时延约束
+        self.max_request_T = 150     # 最大请求时延约束
         self.data_path = "data/loads-sin.txt"
 
         # 开销
-        self.cost_w_list = (0.1, 1, 1)
-        self.C = 30     # 服务提供商给出的时间平均长期开销预算
+        self.cost_w_list = (0.1, 0.3, 0.6)
+        self.C = 80     # 服务提供商给出的时间平均长期开销预算
 
         # 模型、算法配置
         self.predicter_window_size = 5
-        self.lr = 3e-6
-        self.gamma = 0.95
+        self.lr = 5e-6
+        self.gamma = 0.98
         self.gae_lambda = 0.95
         self.update_epochs = 10
         self.clip_coef = 0.2

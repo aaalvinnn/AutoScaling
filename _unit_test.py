@@ -106,14 +106,16 @@ def test_exe_delay():
     action1 = np.zeros(env.state["deploy_info"].shape, dtype=int)
     state1, reward1, _, _, infos1 = env.step(action1)
 
+    print(f"\n")
     env.reset(1037)
     action2 = copy.deepcopy(action1)
-    action2[1][1] = 2
+    action2[1][-1] = 2
     state2, reward2, _, _, infos2 = env.step(action2)
 
+    print(f"\n")
     env.reset(1037)
     action3 = copy.deepcopy(action1)
-    action3[1][0] = 2
+    action3[1][2] = 2
     state3, reward3, _, _, infos3 = env.step(action3)
 
     print("success")

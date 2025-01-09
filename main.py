@@ -40,22 +40,51 @@ class TestHelper(object):
                 self.logger.record(infos)
 
             # Log total rewards for each agent
-            for agent, total_reward in zip(self.agents, total_rewards):
+            for agent, total_reward in zip(self.logger.agents_name, total_rewards):
                 print(f"Agent {agent} total_reward: {total_reward}")
 
         self.logger.visualize()
+        self.logger.save_data()
 
 
 if __name__ == '__main__':
     env_config = config.EnvConfig()
     predicter = Predicter.SMAPredictor(env_config.ms_nums, env_config.predicter_window_size)
-    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
-    ppoAgent = PPO_dnn_v2.PPOAgent(envs[2], env_config)
-    ppoAgent.load("model/0108/160406/PPO_dnn_v2")
-    agents = [NoScaling.NoScalingAgent(envs[0]),
-            #   RandomScaling.RandomScalingAgent(envs[1]),
-              GDCScaling.GDCScalingAgent(envs[1]),
-              ppoAgent]
-    logger = loghelper.LogHelper(["NoScaling", "GDC", "DRL"])
+
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
+    # ppoAgent1 = PPO_dnn_v2.PPOAgent(envs[2], env_config)
+    # ppoAgent1.load("model/0109/124836/PPO_dnn_v2")
+    # ppoAgent2 = PPO_dnn.PPOAgent(envs[3], env_config)
+    # ppoAgent2.load("model/0109/124827/PPO_dnn")
+    # agents = [NoScaling.NoScalingAgent(envs[0]),
+    #           GDCScaling.GDCScalingAgent(envs[1]),
+    #           GDCScaling.GDCScalingAgent_Ideal(envs[2]),
+    #           ppoAgent1,
+    #           ppoAgent2]
+    # logger = loghelper.LogHelper(["NoScaling", "GDC", "Ideal", "DRL2", "DRL1"])
+
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
+    # ppoAgent2 = PPO_dnn.PPOAgent(envs[2], env_config)
+    # ppoAgent2.load("model/0109/175325/PPO_dnn")
+    # agents = [GDCScaling.GDCScalingAgent(envs[0]),
+    #           GDCScaling.GDCScalingAgent_Ideal(envs[1]),
+    #           ppoAgent2]
+    # logger = loghelper.LogHelper(["GDC", "Ideal", "DRL"])
+
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
+    # agents = [GDCScaling.GDCScalingAgent(envs[0]),
+    #           GDCScaling.GDCScalingAgent_Ideal(envs[1]),
+    #           NoScaling.NoScalingAgent(envs[2])]
+    # logger = loghelper.LogHelper(["GDC", "Ideal", "NS"])
+
+    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(4)]
+    ppoAgent2 = PPO_dnn_v2.PPOAgent(envs[3], env_config)
+    ppoAgent2.load("model/0109/175327/PPO_dnn_v2")
+    agents = [GDCScaling.GDCScalingAgent(envs[0]),
+              GDCScaling.GDCScalingAgent_Ideal(envs[1]),
+              NoScaling.NoScalingAgent(envs[2]),
+              ppoAgent2]
+    logger = loghelper.LogHelper(["GDC", "Ideal", "NoScaling", "DRL"])
+
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()

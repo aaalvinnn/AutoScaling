@@ -18,6 +18,9 @@ class SMAPredictor(object):
 
     def predict(self):
         if self.buffer == []:
+            raise ValueError("Please call record() first!")
+        
+            """ 废弃 """
             if self.init_lamda is None:
                 raise ValueError("Please call reset() first!")
             return [self.init_lamda for _ in range(self.ms_nums)]

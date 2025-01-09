@@ -19,7 +19,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 from env import environment, config
-from methods import Predicter
 
 
 CONFIG = config.EnvConfig()
@@ -36,7 +35,7 @@ class ActorCritic(nn.Module):
         self.node_nums = node_nums
         self.ms_nums = ms_nums
         self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums]
-        self.hidden_num_list = [128, 64, 64, 64]
+        self.hidden_num_list = [128, 128, 128, 128]
         self.delta = max_delta*2+1
 
         self.subnet_list = nn.ModuleList([
@@ -48,22 +47,22 @@ class ActorCritic(nn.Module):
         ])
 
         self.dnn = nn.Sequential(
-            layer_init(nn.Linear(np.sum(self.hidden_num_list), 256)),
+            layer_init(nn.Linear(np.sum(self.hidden_num_list), 512)),
             nn.ReLU(),
-            layer_init(nn.Linear(256, 256)),
+            layer_init(nn.Linear(512, 512)),
             nn.ReLU(),
-            layer_init(nn.Linear(256, 256)),
+            layer_init(nn.Linear(512, 512)),
             nn.ReLU(),
         )
 
         # Actor heads (discrete actions)
-        self.actor_nodeIdx = layer_init(nn.Linear(256, self.node_nums), std=0.01)
-        self.actor_msIdx = layer_init(nn.Linear(256, self.ms_nums), std=0.01)
-        self.actor_delta = layer_init(nn.Linear(256, self.delta), std=0.01)
+        self.actor_nodeIdx = layer_init(nn.Linear(512, self.node_nums), std=0.01)
+        self.actor_msIdx = layer_init(nn.Linear(512, self.ms_nums), std=0.01)
+        self.actor_delta = layer_init(nn.Linear(512, self.delta), std=0.01)
 
         # Critic for value function
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(256, 1)),
+            layer_init(nn.Linear(512, 1)),
         )
 
     def _standardize_state(self, ob) -> torch.Tensor:

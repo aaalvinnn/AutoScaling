@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 from env import config
 from datetime import datetime
 import os
+import numpy as np
 
 env_config = config.EnvConfig() 
 class LogHelper(object):
@@ -43,15 +44,68 @@ class LogHelper(object):
 
     def visualize(self):
         for metric in self.ylabel_metrics.keys():
-            plt.figure(figsize=(10, 6))
-            for agent_name in self.agents_name:
-                if metric in self.data[agent_name]:
-                    plt.plot(self.data[agent_name][metric], label=agent_name)
-            plt.title(f"Comparison of {metric}")
-            plt.xlabel("Time Slot")
-            plt.ylabel(f"{metric} ({self.ylabel_metrics[metric]})")
-            plt.legend(loc="best")
-            plt.grid(True)
-            plt.tight_layout()
-            # plt.show()
-            plt.savefig(os.path.join(self.save_path, f"{metric}.png"))
+            if metric == "t_all" or metric == "t_exe" or metric == "t_route" or metric == "request_success_rate" or metric == "y":
+                plt.figure(figsize=(10, 6))
+                for agent_name in self.agents_name:
+                    if metric in self.data[agent_name]:
+                        y = moving_average(self.data[agent_name][metric], 9)
+                        plt.plot(y, label=agent_name)
+                plt.title(f"Comparison of {metric}")
+                plt.xlabel("Time Slot")
+                plt.ylabel(f"{metric} ({self.ylabel_metrics[metric]})")
+                plt.legend(loc="best")
+                plt.grid(True)
+                plt.tight_layout()
+                # plt.show()
+                plt.savefig(os.path.join(self.save_path, f"{metric}.png"))
+
+            else:
+                plt.figure(figsize=(10, 6))
+                for agent_name in self.agents_name:
+                    if metric in self.data[agent_name]:
+                        plt.plot(self.data[agent_name][metric], label=agent_name)
+                plt.title(f"Comparison of {metric}")
+                plt.xlabel("Time Slot")
+                plt.ylabel(f"{metric} ({self.ylabel_metrics[metric]})")
+                plt.legend(loc="best")
+                plt.grid(True)
+                plt.tight_layout()
+                # plt.show()
+                plt.savefig(os.path.join(self.save_path, f"{metric}.png"))
+    
+    def save_data(self):
+        for agent_name in self.agents_name:
+            for metric in self.data[agent_name]:
+                data_save_path = os.path.join(self.save_path, "data", f"{agent_name}", f"{metric}.npy")
+                if not os.path.exists(os.path.dirname(data_save_path)):
+                    os.makedirs(os.path.dirname(data_save_path))
+                np.save(data_save_path, self.data[agent_name][metric])
+
+def moving_average(data, window_size):
+    """
+    对列表进行移动平均，保持长度不变。
+    
+    Args:
+        data (list or np.ndarray): 输入数据列表。
+        window_size (int): 移动窗口大小，必须为奇数。
+        
+    Returns:
+        list: 计算后的移动平均结果，长度与输入相同。
+    """
+    if not isinstance(data, (list, np.ndarray)):
+        raise TypeError("Input data must be a list or numpy array.")
+    if window_size % 2 == 0:
+        raise ValueError("Window size must be an odd number.")
+    if window_size < 1:
+        raise ValueError("Window size must be greater than or equal to 1.")
+
+    # 转换为 numpy 数组
+    data = np.array(data)
+    half_window = window_size // 2
+
+    # 使用镜像填充边界
+    padded_data = np.pad(data, (half_window, half_window), mode='reflect')
+
+    # 计算移动平均
+    result = np.convolve(padded_data, np.ones(window_size) / window_size, mode='valid')
+    return result.tolist()

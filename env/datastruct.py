@@ -86,7 +86,7 @@ class Request(object):
         ) -> None:
         self.id = id
         self.length = random.randint(min_chain_length, max_chain_length)
-        self.T_max = min_request_T + (max_request_T-min_request_T)*(self.length-min_chain_length)/(max_chain_length-min_chain_length)
+        self.T_max = min_request_T + (max_request_T-min_request_T)*(self.length-min_chain_length)/(max_chain_length-min_chain_length+1)
         self.ms_list = random.sample(range(ms_nums), self.length)
         self.min_lamda = min_lamda
         self.max_lamda = max_lamda

@@ -67,6 +67,8 @@ class ActorCritic(nn.Module):
 
         res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / min(
             CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
+            CONFIG.node_min_cpu_resource / CONFIG.ms_min_cpu_resource,
+            CONFIG.node_max_memory_resource / CONFIG.ms_max_memory_resource,
             CONFIG.node_min_memory_resource / CONFIG.ms_min_memory_resource
         )
         res[:, fl[0]:fl[0]+fl[1]] = ob[:, 1, 0] / CONFIG.node_max_cpu_resource
