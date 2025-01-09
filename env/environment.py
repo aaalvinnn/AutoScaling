@@ -88,7 +88,7 @@ class DataCenterEnvironment(gym.Env):
         # 这里假定已知最初的到达率，以确定一个合理的实例数量
         for i in range(len(self.ms_image_list)):
             ms = self.MS_list[i]
-            self.ms_image_list[i] = int(1.5 * ms.lamda / ms.mu)
+            self.ms_image_list[i] = math.ceil(ms.lamda / ms.mu)     # 向上取整
 
         init_deploy_strategy = FFD.FFD(self.MS_list, self.ms_image_list, self.Node_list, self.state)
         self.state, self.Node_list = init_deploy_strategy.deploy()
@@ -260,7 +260,7 @@ class DataCenterEnvironment(gym.Env):
     def _cal_execution_delay(self, request: Request, deploy_info):
         """ 计算单个请求的执行延迟（包括处理和排队延迟） """
         # TODO 请求失败处理逻辑
-        t_exe = 0
+        t_exe_list = []
         for ms_id in request.ms_list:
             ms = self.MS_list[ms_id]
             image_num_list = deploy_info[ms_id]
@@ -270,6 +270,7 @@ class DataCenterEnvironment(gym.Env):
             if ms.lamda / (np.sum(image_num_list)*ms.mu + 1e-6) >= 1:
                 return request.T_max    # 直接返回用户时延约束阈值
 
+            t_exe = 0
             for node in self.Node_list:
                 image_num = int(image_num_list[node.id])
                 lamda = ms.lamda * image_num / np.sum(image_num_list)   # 根据概率路由进行分流
@@ -286,16 +287,20 @@ class DataCenterEnvironment(gym.Env):
                 p0 = 1 /(p0 + ((1 / (math.factorial(image_num)*(1-ro))) * (lamda/ms.mu)**image_num))
                 lq = ((image_num*ro)**image_num / (math.factorial(image_num)*(1 - ro)**2)) * ro * p0
                 wq = lq / lamda
-                t_exe += wq + 1/ms.mu
+                t_exe += wq + 1/ms.mu*(image_num/np.sum(image_num_list))    # 1/ms.mu 是平均处理时间
 
-        return t_exe
+            t_exe_list.append(t_exe)
+
+        # debug
+        # print(f"Request {request.id} execution delay: {np.sum(t_exe_list)}")
+        return np.sum(t_exe_list)
     
     def _cal_route_delay(self, request: Request, deploy_info):
         """ 计算单个请求的路由延迟 """
         if request.length <= 1:
             raise ValueError(f"Request {request.id} length {request.length} <= 1, can not be routed ever.")
         
-        t_route = 0
+        t_route_list = []
         start, end = 0, 1
         pre_route_probs = self._get_first_route_prob(request.ms_list[0], deploy_info)
         while end < request.length:
@@ -308,13 +313,15 @@ class DataCenterEnvironment(gym.Env):
             ms2ms_data = self.MS2MS_data_graph[ms1_id][ms2_id]
             # 先沿列逐行求和，得到每个start节点的路由延迟，然后再乘上选到start节点的概率
             t_route_tmp = np.sum(route_probs * ms2ms_data / node2node_bw, axis=1)
-            t_route += np.dot(t_route_tmp, pre_route_probs)
+            t_route_list.append(np.dot(t_route_tmp, pre_route_probs))
             # 更新pre_route_probs
             pre_route_probs = pre_route_probs @ route_probs
             start += 1
             end += 1
-            
-        return t_route
+        
+        # debug
+        # print(f"Request {request.id} route delay: {np.sum(t_route_list)}")
+        return np.sum(t_route_list)
 
     def cal_total_access_delay(self, deploy_info):
         """ 计算这个时隙所有请求的总访问延迟 """
@@ -458,6 +465,7 @@ class DataCenterEnvironment(gym.Env):
         self._update_arrival_rate(self.request_lamda_list[0], self.RequestFlow_list, self.lamda_random_matrix)
 
         # 预测一个初始值
+        self.predicter.record(self._cal_lamda_list())   # 假设知道第一个值，绘图美观，同时方便训练
         self._update_state_lamda(self.predicter.predict())
 
         # 初次部署
