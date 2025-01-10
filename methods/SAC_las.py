@@ -47,22 +47,19 @@ class ActorCritic(nn.Module):
         self.delta = max_delta*2+1
 
         self.dnn = nn.Sequential(
-            layer_init(nn.Linear(np.sum(self.feature_length_list), 512)),
+            layer_init(nn.Linear(np.sum(self.feature_length_list), 1024)),
             nn.ReLU(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(1024, 1024)),
             nn.ReLU(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(1024, 1024)),
             nn.ReLU(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(1024, 1024)),
             nn.ReLU()
         )
 
         # Actor heads (discrete actions) (node_idx, ms_idx, delta)
-        self.actor_heads = nn.ModuleList([
-            layer_init(nn.Linear(512, self.node_nums), std=0.01),
-            layer_init(nn.Linear(512, self.ms_nums), std=0.01),
-            layer_init(nn.Linear(512, self.delta), std=0.01)
-        ])
+        action_size = self.node_nums * self.ms_nums * self.delta
+        self.actor = layer_init(nn.Linear(1024, action_size))
 
     def _standardize_state(self, ob) -> torch.Tensor:
         """ 标准化状态，支持批次形状，同时展平给DNN输入 """
@@ -87,16 +84,16 @@ class ActorCritic(nn.Module):
     def get_value(self, ob):
         x = self._standardize_state(ob)
         features = self.dnn(x)
-        value_list = [self.actor_heads[i](features) for i in range(3)]
+        value = self.actor(features)
 
-        return value_list
+        return value
 
     def get_action(self, ob):
         x = self._standardize_state(ob)
         features = self.dnn(x)
-        action_prob_list = [F.softmax(self.actor_heads[i](features), dim=-1) for i in range(3)]
+        action_prob = F.softmax(self.actor(features), dim=1)
 
-        return action_prob_list
+        return action_prob
     
 class SACAgent:
     ''' 处理离散动作的SAC算法 '''
@@ -139,19 +136,20 @@ class SACAgent:
     def get_action(self, state):
         state = torch.tensor([state], dtype=torch.float).to(self.device)
         probs = self.actor.get_action(state)
-        action_dist = [torch.distributions.Categorical(probs[i]) for i in range(3)]
-        action = [action_dist[i].sample().item() for i in range(3)]
-        return action
+        action_dist = torch.distributions.Categorical(probs)
+        action = action_dist.sample()
+        return action.item()
 
     # 计算目标Q值,直接用策略网络的输出概率进行期望计算
     def calc_target(self, rewards, next_states, dones):
-        next_probs = self.actor.get_action(next_states)    # 联合动作空间不同维度动作输出的概率乘积
-        next_log_probs = [torch.log(next_probs[i] + 1e-8) for i in range(3)]
-        # 分别计算不同维度的动作的entropy和qvalue，再求和
-        entropy = sum([-torch.sum(next_probs[i] * next_log_probs[i], dim=1, keepdim=True) for i in range(3)])
+        next_probs = self.actor.get_action(next_states)
+        next_log_probs = torch.log(next_probs + 1e-8)
+        entropy = -torch.sum(next_probs * next_log_probs, dim=1, keepdim=True)
         q1_value = self.target_critic_1.get_value(next_states)
         q2_value = self.target_critic_2.get_value(next_states)
-        min_qvalue = sum([torch.sum(next_probs[i] * torch.min(q1_value[i], q2_value[i]), dim=1, keepdim=True) for i in range(3)])
+        min_qvalue = torch.sum(next_probs * torch.min(q1_value, q2_value),
+                               dim=1,
+                               keepdim=True)
         next_value = min_qvalue + self.log_alpha.exp() * entropy
         td_target = rewards + self.gamma * next_value * (1 - dones)
         return td_target
@@ -165,7 +163,7 @@ class SACAgent:
     def update(self, transition_dict):
         states = torch.tensor(transition_dict['states'],
                               dtype=torch.float).to(self.device)
-        actions = torch.tensor(transition_dict['actions']).to(
+        actions = torch.tensor(transition_dict['actions']).view(-1, 1).to(
             self.device)  # 动作不再是float类型
         rewards = torch.tensor(transition_dict['rewards'],
                                dtype=torch.float).view(-1, 1).to(self.device)
@@ -176,11 +174,10 @@ class SACAgent:
 
         # 更新两个Q网络
         td_target = self.calc_target(rewards, next_states, dones)
-        # 分别计算不同维度的动作的qvalue，再求和
-        critic_1_q_values = sum([self.critic_1.get_value(states)[i].gather(1, actions[:,i].unsqueeze(1)) for i in range(3)])
+        critic_1_q_values = self.critic_1.get_value(states).gather(1, actions)
         critic_1_loss = torch.mean(
             F.mse_loss(critic_1_q_values, td_target.detach()))
-        critic_2_q_values = sum([self.critic_2.get_value(states)[i].gather(1, actions[:,i].unsqueeze(1)) for i in range(3)])
+        critic_2_q_values = self.critic_2.get_value(states).gather(1, actions)
         critic_2_loss = torch.mean(
             F.mse_loss(critic_2_q_values, td_target.detach()))
         self.critic_1_optimizer.zero_grad()
@@ -192,19 +189,22 @@ class SACAgent:
 
         # 更新策略网络
         probs = self.actor.get_action(states)
-        log_probs = [torch.log(probs[i] + 1e-8) for i in range(3)]
+        log_probs = torch.log(probs + 1e-8)
         # 直接根据概率计算熵
-        entropy = sum([-torch.sum(probs[i] * log_probs[i], dim=1, keepdim=True) for i in range(3)])
+        entropy = -torch.sum(probs * log_probs, dim=1, keepdim=True)  #
         q1_value = self.critic_1.get_value(states)
         q2_value = self.critic_2.get_value(states)
-        min_qvalue = sum([torch.sum(probs[i] * torch.min(q1_value[i], q2_value[i]), dim=1, keepdim=True) for i in range(3)])
+        min_qvalue = torch.sum(probs * torch.min(q1_value, q2_value),
+                               dim=1,
+                               keepdim=True)  # 直接根据概率计算期望
         actor_loss = torch.mean(-self.log_alpha.exp() * entropy - min_qvalue)
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
 
         # 更新alpha值
-        alpha_loss = torch.mean((entropy - self.target_entropy).detach() * self.log_alpha.exp())
+        alpha_loss = torch.mean(
+            (entropy - self.target_entropy).detach() * self.log_alpha.exp())
         self.log_alpha_optimizer.zero_grad()
         alpha_loss.backward()
         self.log_alpha_optimizer.step()
@@ -215,7 +215,7 @@ class SACAgent:
 
 def train(agent: SACAgent):
     CONFIG = config.EnvConfig()
-    save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"), "SAC")
+    save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"), "SAC_las")
     writer = SummaryWriter(save_path)
 
     env = environment.DataCenterEnvironment(0, CONFIG)
