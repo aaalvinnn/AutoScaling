@@ -40,11 +40,14 @@ class DataCenterEnvironment(gym.Env):
         # 动作、状态空间
         self.state = None   # to be filled in reset()
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(4, self.ms_nums, self.server_node_nums), dtype=np.float32)
-        self.action_space = gym.spaces.Tuple((
-            gym.spaces.Discrete(self.server_node_nums),
-            gym.spaces.Discrete(self.ms_nums),
-            gym.spaces.Discrete(self.config.max_instance_update_num * 2 + 1)
-        ))
+        if self.config.is_las:
+            self.action_space = gym.spaces.Discrete(self.server_node_nums * self.ms_nums * (self.config.max_instance_update_num * 2 + 1))
+        else:
+            self.action_space = gym.spaces.Tuple((
+                gym.spaces.Discrete(self.server_node_nums),
+                gym.spaces.Discrete(self.ms_nums),
+                gym.spaces.Discrete(self.config.max_instance_update_num * 2 + 1)
+            ))
         pass
 
     def _reset_seed(self, seed):
@@ -155,26 +158,53 @@ class DataCenterEnvironment(gym.Env):
         total_update_instance_nums = 0
         penalty = 0
 
+        # 若输入动作为一个整数：（node_id * ms_id * delta）
+        if isinstance(action, int) or len(action) == 0:
+            max_delta_size = self.config.max_instance_update_num*2+1
+            delta = action % max_delta_size - self.config.max_instance_update_num
+            ms_idx = (action // max_delta_size) % self.ms_nums
+            node_idx = (action // (max_delta_size * self.ms_nums)) % self.server_node_nums
+            ms = self.MS_list[ms_idx]  # 微服务
+            node = self.Node_list[node_idx]  # 服务器节点
+
+            for _ in range(abs(delta)):
+                if node.is_resource_enough(ms, np.sign(delta)):
+                    # 更新self.Node_list
+                    cpu, memory = node.delpoy(ms, np.sign(delta))
+                    # 更新self.state
+                    self.state["deploy_info"][ms_idx, node_idx] += np.sign(delta)
+                    self.state["cpus"][node_idx] = cpu
+                    self.state["memories"][node_idx] = memory
+                    # 更新self.ms_image_list
+                    self.ms_image_list[ms_idx] += np.sign(delta)
+                    # 更新返回值
+                    total_update_instance_nums += np.sign(delta)
+                else:
+                    penalty += self.config.penalty
+
+            return total_update_instance_nums, penalty
+
         # 若输入动作为一个长度为3的向量：(node_id, ms_id, delta)
-        if len(action) == 3:
+        elif len(action) == 3:
             node_idx, ms_idx, delta = action
             delta = delta - self.config.max_instance_update_num     # 将delta从0-5映射到-2-2
             ms = self.MS_list[ms_idx]  # 微服务
             node = self.Node_list[node_idx]  # 服务器节点
 
-            if node.is_resource_enough(ms, delta):
-                # 更新self.Node_list
-                cpu, memory = node.delpoy(ms, delta)
-                # 更新self.state
-                self.state["deploy_info"][ms_idx, node_idx] += delta
-                self.state["cpus"][node_idx] = cpu
-                self.state["memories"][node_idx] = memory
-                # 更新self.ms_image_list
-                self.ms_image_list[ms_idx] += delta
-                # 更新返回值
-                total_update_instance_nums += delta
-            else:
-                penalty += self.config.penalty
+            for _ in range(abs(delta)):
+                if node.is_resource_enough(ms, np.sign(delta)):
+                    # 更新self.Node_list
+                    cpu, memory = node.delpoy(ms, np.sign(delta))
+                    # 更新self.state
+                    self.state["deploy_info"][ms_idx, node_idx] += np.sign(delta)
+                    self.state["cpus"][node_idx] = cpu
+                    self.state["memories"][node_idx] = memory
+                    # 更新self.ms_image_list
+                    self.ms_image_list[ms_idx] += np.sign(delta)
+                    # 更新返回值
+                    total_update_instance_nums += np.sign(delta)
+                else:
+                    penalty += self.config.penalty
 
             return total_update_instance_nums, penalty
         
@@ -188,20 +218,21 @@ class DataCenterEnvironment(gym.Env):
 
                     if delta == 0:
                         continue
-
-                    if node.is_resource_enough(ms, delta):
-                        # 更新self.Node_list
-                        cpu, memory = node.delpoy(ms, delta)
-                        # 更新self.state
-                        self.state["deploy_info"][ms_idx, node_idx] += delta
-                        self.state["cpus"][node_idx] = cpu
-                        self.state["memories"][node_idx] = memory
-                        # 更新self.ms_image_list
-                        self.ms_image_list[ms_idx] += delta
-                        # 更新返回值
-                        total_update_instance_nums += delta
-                    else:
-                        penalty += self.config.penalty
+                    
+                    for _ in range(abs(delta)):
+                        if node.is_resource_enough(ms, np.sign(delta)):
+                            # 更新self.Node_list
+                            cpu, memory = node.delpoy(ms, np.sign(delta))
+                            # 更新self.state
+                            self.state["deploy_info"][ms_idx, node_idx] += np.sign(delta)
+                            self.state["cpus"][node_idx] = cpu
+                            self.state["memories"][node_idx] = memory
+                            # 更新self.ms_image_list
+                            self.ms_image_list[ms_idx] += np.sign(delta)
+                            # 更新返回值
+                            total_update_instance_nums += np.sign(delta)
+                        else:
+                            penalty += self.config.penalty
 
             return total_update_instance_nums, penalty
         
@@ -501,7 +532,7 @@ class DataCenterEnvironment(gym.Env):
         self.timeslot.add_time()
         # reward = 目标函数 + 异常动作惩罚 + 请求成功率奖励
         y = self.config.w_ns_and_delay*(10*np.log1p(cost*Qt)) + np.mean(t_total_list)
-        reward = -y + penalty + 50 * request_success_rate
+        reward = -2*y + penalty + 50 * request_success_rate
 
         # # debug
         # if Qt > 0:
@@ -534,7 +565,7 @@ class DataCenterEnvironment(gym.Env):
             "ns": ns,
             "cost": cost,
             "Qt": Qt,
-            "penalty": penalty/self.config.penalty,
+            "penalty": penalty/(self.config.penalty+1e-6),
             "node_using_num": node_using_num,
             "image_nums": np.sum(self.ms_image_list),
             "predict_lamda": np.mean(self.predicter.predict()),
