@@ -48,7 +48,8 @@ class LogHelper(object):
                 plt.figure(figsize=(10, 6))
                 for agent_name in self.agents_name:
                     if metric in self.data[agent_name]:
-                        y = moving_average(self.data[agent_name][metric], 9)
+                        y = moving_average(self.data[agent_name][metric], 15)
+                        # y = self.data[agent_name][metric]
                         plt.plot(y, label=agent_name)
                 plt.title(f"Comparison of {metric}")
                 plt.xlabel("Time Slot")
