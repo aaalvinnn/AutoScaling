@@ -34,28 +34,44 @@ class ActorCritic(nn.Module):
         super().__init__()
         self.node_nums = node_nums
         self.ms_nums = ms_nums
-        self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums]
+        self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums, self.ms_nums*CONFIG.hitory_lamda_length]
         self.delta = max_delta*2+1
 
         self.dnn = nn.Sequential(
-            layer_init(nn.Linear(np.sum(self.feature_length_list), 256)),
+            layer_init(nn.Linear(np.sum(self.feature_length_list), 512)),
             nn.ReLU(),
-            layer_init(nn.Linear(256, 256)),
+            layer_init(nn.Linear(512, 512)),
             nn.ReLU(),
-            layer_init(nn.Linear(256, 256)),
+            layer_init(nn.Linear(512, 512)),
             nn.ReLU(),
-            layer_init(nn.Linear(256, 256)),
+            layer_init(nn.Linear(512, 512)),
             nn.ReLU(),
         )
 
         # Actor heads (discrete actions)
-        self.actor_nodeIdx = layer_init(nn.Linear(256, self.node_nums), std=0.01)
-        self.actor_msIdx = layer_init(nn.Linear(256, self.ms_nums), std=0.01)
-        self.actor_delta = layer_init(nn.Linear(256, self.delta), std=0.01)
+        # self.actor_nodeIdx = nn.Sequential(
+        #     layer_init(nn.Linear(512, 512)),
+        #     nn.ReLU(),
+        #     layer_init(nn.Linear(512, self.node_nums), std=0.01)
+        # )
+        # self.actor_msIdx = nn.Sequential(
+        #     layer_init(nn.Linear(512, 512)),
+        #     nn.ReLU(),
+        #     layer_init(nn.Linear(512, self.ms_nums), std=0.01)
+        # )
+        # self.actor_delta = nn.Sequential(
+        #     layer_init(nn.Linear(512, 512)),
+        #     nn.ReLU(),
+        #     layer_init(nn.Linear(512, self.delta), std=0.01)
+        # )
+        
+        self.actor_nodeIdx = layer_init(nn.Linear(512, self.node_nums), std=0.01)
+        self.actor_msIdx = layer_init(nn.Linear(512, self.ms_nums), std=0.01)
+        self.actor_delta = layer_init(nn.Linear(512, self.delta), std=0.01)
 
         # Critic for value function
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(256, 1)),
+            layer_init(nn.Linear(512, 1)),
         )
 
     def _standardize_state(self, ob) -> torch.Tensor:
@@ -67,15 +83,17 @@ class ActorCritic(nn.Module):
 
         res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / min(
             CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
-            CONFIG.node_min_cpu_resource / CONFIG.ms_min_cpu_resource,
-            CONFIG.node_max_memory_resource / CONFIG.ms_max_memory_resource,
             CONFIG.node_min_memory_resource / CONFIG.ms_min_memory_resource
         )
         res[:, fl[0]:fl[0]+fl[1]] = ob[:, 1, 0] / CONFIG.node_max_cpu_resource
         res[:, fl[0]+fl[1]:fl[0]+fl[1]+fl[2]] = ob[:, 2, 0] / CONFIG.node_max_memory_resource
-        res[:, fl[0]+fl[1]+fl[2]:] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
+        res[:, fl[0]+fl[1]+fl[2]:fl[0]+fl[1]+fl[2]+fl[3]] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
+        for i in range(CONFIG.hitory_lamda_length):
+            l = fl[0]+fl[1]+fl[2]+fl[3] + self.ms_nums*i
+            r = fl[0]+fl[1]+fl[2]+fl[3] + self.ms_nums*(i+1)
+            res[:, l:r] = ob[:, 3, :, i+1] / CONFIG.estimated_max_lamda
         
-        data = res.cpu().numpy()    #debug
+        # data = res.cpu().numpy()    #debug
         return res
 
     def get_value(self, ob):
@@ -140,7 +158,7 @@ class PPOAgent(object):
         torch.save(self.actorcrtic.state_dict(), save_path)
 
     def load(self, path):
-        load_path = os.path.join(path, "model_dnn_best.pth")
+        load_path = os.path.join(path, "model_dnn.pth")
         self.actorcrtic.load_state_dict(torch.load(load_path, weights_only=True))
 
     def get_action(self, ob):

@@ -16,6 +16,9 @@ class SMAPredictor(object):
     def record(self, value: list):
         self.buffer.append(value)
 
+    def get_buffer_len(self):
+        return len(self.buffer)
+
     def predict(self):
         if self.buffer == []:
             raise ValueError("Please call record() first!")

@@ -19,6 +19,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 from env import environment, config
+from methods import Predicter
 
 
 CONFIG = config.EnvConfig()
@@ -29,25 +30,16 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     return layer
 
 class ActorCritic(nn.Module):
-    """ 为避免特征长度差异对模型造成不良影响，独立特征提取后再拼接 """
     def __init__(self, node_nums, ms_nums, max_delta):
         super().__init__()
         self.node_nums = node_nums
         self.ms_nums = ms_nums
         self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums, self.ms_nums*CONFIG.hitory_lamda_length]
-        self.hidden_num_list = [256, 128, 128, 128]
         self.delta = max_delta*2+1
-
-        self.subnet_list = nn.ModuleList([
-            nn.Sequential(
-                layer_init(nn.Linear(feature_length, hidden_num)),
-                nn.ReLU(),
-            )
-            for feature_length, hidden_num in zip(self.feature_length_list, self.hidden_num_list)
-        ])
+        self.action_length = self.node_nums *self.ms_nums * self.delta
 
         self.dnn = nn.Sequential(
-            layer_init(nn.Linear(np.sum(self.hidden_num_list), 512)),
+            layer_init(nn.Linear(np.sum(self.feature_length_list), 512)),
             nn.ReLU(),
             layer_init(nn.Linear(512, 512)),
             nn.ReLU(),
@@ -58,9 +50,9 @@ class ActorCritic(nn.Module):
         )
 
         # Actor heads (discrete actions)
-        self.actor_nodeIdx = layer_init(nn.Linear(512, self.node_nums), std=0.01)
-        self.actor_msIdx = layer_init(nn.Linear(512, self.ms_nums), std=0.01)
-        self.actor_delta = layer_init(nn.Linear(512, self.delta), std=0.01)
+        self.actor = nn.Sequential(
+            layer_init(nn.Linear(512, self.action_length)),
+        )
 
         # Critic for value function
         self.critic = nn.Sequential(
@@ -89,71 +81,31 @@ class ActorCritic(nn.Module):
         # data = res.cpu().numpy()    #debug
         return res
 
-    def get_value(self, ob):
+    def get_value(self, x):
         # Standardize state
-        x = self._standardize_state(ob)
-
-        # Subnet outputs
-        feature_chunks = torch.split(x, self.feature_length_list, dim=1)
-        subnet_outputs = []
-        for i, subnet in enumerate(self.subnet_list):
-            subnet_outputs.append(subnet(feature_chunks[i]))
-        x = torch.cat(subnet_outputs, dim=1)
-
-        # Shared features
+        x = self._standardize_state(x)
         x = self.dnn(x)
-
         return self.critic(x)
 
-    def get_action_and_value(self, ob, action=None):
+    def get_action_and_value(self, x, action=None):
         # Standardize state
-        x = self._standardize_state(ob)
-
-        # Subnet outputs
-        feature_chunks = torch.split(x, self.feature_length_list, dim=1)
-        subnet_outputs = []
-        for i, subnet in enumerate(self.subnet_list):
-            subnet_outputs.append(subnet(feature_chunks[i]))
-        x = torch.cat(subnet_outputs, dim=1)
-
+        x = self._standardize_state(x)
         # Process DNN inputs
         x = self.dnn(x)
-
-        # Discrete action logits
-        logits_nodeIdx = self.actor_nodeIdx(x)
-        logits_msIdx = self.actor_msIdx(x)
-        logits_delta = self.actor_delta(x)
+        # action probs
+        logits = self.actor(x)
 
         # Probabilities
-        probs_nodeIdx = Categorical(logits=logits_nodeIdx)
-        probs_msIdx = Categorical(logits=logits_msIdx)
-        probs_delta = Categorical(logits=logits_delta)
+        probs = Categorical(logits=logits)
 
         if action is None:
             # Sample actions
-            action_nodeIdx = probs_nodeIdx.sample()
-            action_msIdx = probs_msIdx.sample()
-            action_delta = probs_delta.sample()
+            action = probs.sample()
 
-            # Combine actions
-            action = torch.stack([action_nodeIdx, action_msIdx, action_delta], dim=-1)
-        else:
-            action_nodeIdx = action[:, 0]
-            action_msIdx = action[:, 1]
-            action_delta = action[:, 2]
+        return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
-        # Log probabilities，同等权重的直接相加
-        logprob_nodeIdx = probs_nodeIdx.log_prob(action_nodeIdx)
-        logprob_msIdx = probs_msIdx.log_prob(action_msIdx)
-        logprob_delta = probs_delta.log_prob(action_delta)
-        logprob = logprob_nodeIdx + logprob_msIdx + logprob_delta
-
-        # Entropies
-        entropy = probs_nodeIdx.entropy() + probs_msIdx.entropy() + probs_delta.entropy()
-
-        return action, logprob, entropy, self.critic(x)
-
-class PPOAgent(object):
+class PPOLasAgent(object):
+    """ Large action space 直接展平输出 """
     def __init__(self, env: environment.DataCenterEnvironment, config: config.EnvConfig):
         # Basic config
         self.env = env
@@ -169,7 +121,7 @@ class PPOAgent(object):
         torch.save(self.actorcrtic.state_dict(), save_path)
 
     def load(self, path):
-        load_path = os.path.join(path, "model_dnn_v2.pth")
+        load_path = os.path.join(path, "model_dnn_best.pth")
         self.actorcrtic.load_state_dict(torch.load(load_path, weights_only=True))
 
     def get_action(self, ob):
@@ -193,9 +145,9 @@ def store_next_obs(obs: list, next_obs: tuple, step: int):
     for i in range(4):
         obs[i][step] = torch.Tensor(next_obs[i]).to(CONFIG.device)
 
-def train(agent: PPOAgent):
+def train(agent: PPOLasAgent):
     CONFIG = config.EnvConfig()
-    save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"), "PPO_dnn_v2")
+    save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"), "PPO_dnn_las")
     writer = SummaryWriter(save_path)
 
     # TRY NOT TO MODIFY: seeding
@@ -210,7 +162,7 @@ def train(agent: PPOAgent):
 
     # Storage setup
     obs = torch.zeros((CONFIG.num_steps, CONFIG.num_envs) + envs.single_observation_space.shape).to(CONFIG.device)
-    actions = torch.zeros((CONFIG.num_steps, CONFIG.num_envs, len(envs.single_action_space))).to(CONFIG.device)
+    actions = torch.zeros((CONFIG.num_steps, CONFIG.num_envs) + envs.single_action_space.shape).to(CONFIG.device)
     logprobs = torch.zeros((CONFIG.num_steps, CONFIG.num_envs)).to(CONFIG.device)
     rewards = torch.zeros((CONFIG.num_steps, CONFIG.num_envs)).to(CONFIG.device)
     dones = torch.zeros((CONFIG.num_steps, CONFIG.num_envs)).to(CONFIG.device)
@@ -249,7 +201,7 @@ def train(agent: PPOAgent):
             logprobs[step] = logprob
 
             # TRY NOT TO MODIFY: execute the game and log data.
-            next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy().T)        # 传入step后是按列截取的，而我们期望是按行截取的，故转置一下
+            next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
             next_done = np.logical_or(terminations, truncations)
             rewards[step] = torch.tensor(reward).to(CONFIG.device).view(-1)
             next_obs = torch.Tensor(next_obs).to(CONFIG.device)
@@ -304,7 +256,7 @@ def train(agent: PPOAgent):
         # flatten the batch
         b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + (len(envs.single_action_space),))
+        b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
@@ -376,10 +328,10 @@ def train(agent: PPOAgent):
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-        agent.save(save_path, "model_dnn_v2.pth")
+        agent.save(save_path, "model_dnn.pth")
         if best_reward < np.sum(total_reward):
             best_reward = np.sum(total_reward)
-            agent.save(save_path, "model_dnn_v2_best.pth")
+            agent.save(save_path, "model_dnn_best.pth")
 
     envs.close()
     writer.close()
@@ -387,6 +339,6 @@ def train(agent: PPOAgent):
 
 if __name__ == "__main__":
     _env = environment.DataCenterEnvironment(-1, CONFIG)    # 只用于定义agent，不参与实际训练
-    agent = PPOAgent(_env, CONFIG)
+    agent = PPOLasAgent(_env, CONFIG)
     # agent.load("model/0103")
     train(agent)

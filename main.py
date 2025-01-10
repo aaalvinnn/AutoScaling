@@ -1,5 +1,5 @@
 from env import config, environment, loghelper
-from methods import NoScaling, RandomScaling, GDCScaling, PPO_cnn, PPO_dnn, PPO_dnn_v2
+from methods import NoScaling, RandomScaling, GDCScaling, PPO_cnn, PPO_dnn, PPO_dnn_v2, ProScaling
 from methods import Predicter
 import random
 import numpy as np
@@ -77,14 +77,15 @@ if __name__ == '__main__':
     #           NoScaling.NoScalingAgent(envs[2])]
     # logger = loghelper.LogHelper(["GDC", "Ideal", "NS"])
 
-    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(4)]
-    ppoAgent2 = PPO_dnn_v2.PPOAgent(envs[3], env_config)
-    ppoAgent2.load("model/0109/175327/PPO_dnn_v2")
+    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
+    ppoAgent2 = PPO_dnn_v2.PPOAgent(envs[4], env_config)
+    ppoAgent2.load("model/0110/201136/PPO_dnn_v2")
     agents = [GDCScaling.GDCScalingAgent(envs[0]),
               GDCScaling.GDCScalingAgent_Ideal(envs[1]),
               NoScaling.NoScalingAgent(envs[2]),
+              ProScaling.ProScalingAgent(envs[3]),
               ppoAgent2]
-    logger = loghelper.LogHelper(["GDC", "Ideal", "NoScaling", "DRL"])
+    logger = loghelper.LogHelper(["GDC", "Ideal", "NoScaling", "ProScaling", "DRL"])
 
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()

@@ -42,18 +42,19 @@ class EnvConfig:
         self.max_request_chain_length = 8
         self.estimated_max_lamda = 50
         self.init_lamda = 15
-        self.min_request_T = 20     # 最大请求时延约束
+        self.min_request_T = 30     # 最大请求时延约束
         self.max_request_T = 50     # 最大请求时延约束
-        self.data_path = "data/loads-sin.txt"
+        self.data_path = "data/loads-twitter.txt"
 
         # 开销
         self.cost_w_list = (0.1, 1, 1)
-        self.C = 30     # 服务提供商给出的时间平均长期开销预算
+        self.C = 25     # 服务提供商给出的时间平均长期开销预算
 
         # 模型、算法配置
         self.predicter_window_size = 5
-        self.lr = 3e-6
-        self.gamma = 0.95
+        self.hitory_lamda_length = min(5, self.node_nums)   # 记录的历史到达率，长度不能大于node_nums，否则无法储存于tensor中；用于模型训练的状态输入
+        self.lr = 2e-6
+        self.gamma = 0.98
         self.gae_lambda = 0.95
         self.update_epochs = 10
         self.clip_coef = 0.2
@@ -66,8 +67,9 @@ class EnvConfig:
         # 训练配置
         self.device = "cpu"
         self.model_path = "model"
+        self.is_las = False  # 是否展平输出而不采用多输出头
         self.num_steps = self.time_slot_end - self.time_slot_start
-        self.num_envs = 16
+        self.num_envs = 8
         self.batch_size = int(self.num_envs * self.num_steps)
         self.num_minibatches = 4
         self.minibatch_size = int(self.batch_size // self.num_minibatches)
@@ -76,7 +78,7 @@ class EnvConfig:
         self.num_iterations = self.total_timesteps // self.batch_size
 
         # 奖励配置
-        self.penalty = -100
-        self.w_ns_and_delay = 0.3
+        self.penalty = -50
+        self.w_ns_and_delay = 1
 
 

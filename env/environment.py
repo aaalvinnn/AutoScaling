@@ -77,7 +77,8 @@ class DataCenterEnvironment(gym.Env):
             "deploy_info": np.zeros((self.ms_nums, self.server_node_nums)),
             "cpus": np.zeros(self.server_node_nums),
             "memories": np.zeros(self.server_node_nums),
-            "predicted_lamda": np.zeros(self.ms_nums)
+            "predicted_lamda": np.zeros(self.ms_nums),
+            "history_lamda": np.zeros((self.config.hitory_lamda_length, self.ms_nums))
         }
         for node_idx in range(self.server_node_nums):
             node = self.Node_list[node_idx]
@@ -108,7 +109,9 @@ class DataCenterEnvironment(gym.Env):
         res[0] = self.state["deploy_info"]
         res[1] = self.state["cpus"]
         res[2] = self.state["memories"]
-        res[3] = self.state["predicted_lamda"][:,np.newaxis]
+        res[3][:,0] = self.state["predicted_lamda"]    # 第一项放预测值
+        for i in range(len(self.state["history_lamda"])):
+            res[3][:,i + 1] = self.state["history_lamda"][i]
 
         return res
 
@@ -241,7 +244,14 @@ class DataCenterEnvironment(gym.Env):
     def _update_state_lamda(self, lamda: list):
         """ 更新微服务请求的到达率状态输入 """
         for ms_idx in range(self.ms_nums):
+            # 预测值
             self.state["predicted_lamda"][ms_idx] = lamda[ms_idx]
+            # 历史值
+            for i in range(min(self.config.hitory_lamda_length, self.predicter.get_buffer_len())):
+                self.state["history_lamda"][i][ms_idx] = self.predicter.buffer[-i][ms_idx]
+
+        pass
+
 
     def _get_route_prob_matrix(self, ms1_id, ms2_id, deploy_info):
         """
@@ -532,7 +542,7 @@ class DataCenterEnvironment(gym.Env):
         self.timeslot.add_time()
         # reward = 目标函数 + 异常动作惩罚 + 请求成功率奖励
         y = self.config.w_ns_and_delay*(10*np.log1p(cost*Qt)) + np.mean(t_total_list)
-        reward = -2*y + penalty + 50 * request_success_rate
+        reward = -y + penalty + 50 * request_success_rate
 
         # # debug
         # if Qt > 0:
