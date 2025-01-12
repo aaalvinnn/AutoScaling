@@ -1,5 +1,6 @@
-from env import config, environment, loghelper
-from methods import NoScaling, RandomScaling, GDCScaling, PPO_cnn, PPO_dnn, PPO_dnn_v2, ProScaling
+from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_smallscale, config_twitter_middlescale, config_twitter_largescale
+from env import environment, loghelper
+from methods import NoScaling, RandomScaling, GDCScaling, PPO_dnn, PPO_dnn_v2, PPO_dnn_v3, ProScaling
 from methods import Predicter
 import random
 import numpy as np
@@ -48,7 +49,7 @@ class TestHelper(object):
 
 
 if __name__ == '__main__':
-    env_config = config.EnvConfig()
+    env_config = config_twitter_largescale.EnvConfig()
     predicter = Predicter.SMAPredictor(env_config.ms_nums, env_config.predicter_window_size)
 
     # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
@@ -71,21 +72,22 @@ if __name__ == '__main__':
     #           ppoAgent2]
     # logger = loghelper.LogHelper(["GDC", "Ideal", "DRL"])
 
-    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(4)]
     # agents = [GDCScaling.GDCScalingAgent(envs[0]),
     #           GDCScaling.GDCScalingAgent_Ideal(envs[1]),
-    #           NoScaling.NoScalingAgent(envs[2])]
-    # logger = loghelper.LogHelper(["GDC", "Ideal", "NS"])
+    #           NoScaling.NoScalingAgent(envs[2]),
+    #           ProScaling.ProScalingAgent(envs[3])]
+    # logger = loghelper.LogHelper(["GDC", "Ideal", "NS", "Proscale"], envs)
 
     envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
-    ppoAgent2 = PPO_dnn_v2.PPOAgent(envs[4], env_config)
-    ppoAgent2.load("model/0110/201136/PPO_dnn_v2")
+    ppoAgent2 = PPO_dnn.PPOAgent(envs[4], env_config)
+    ppoAgent2.load("model/twitter_largescale/0112/2142/PPO_dnn")
     agents = [GDCScaling.GDCScalingAgent(envs[0]),
               GDCScaling.GDCScalingAgent_Ideal(envs[1]),
               NoScaling.NoScalingAgent(envs[2]),
               ProScaling.ProScalingAgent(envs[3]),
               ppoAgent2]
-    logger = loghelper.LogHelper(["GDC", "Ideal", "NoScaling", "ProScaling", "DRL"])
+    logger = loghelper.LogHelper(["GDC", "Ideal", "NoScaling", "ProScaling", "DRL"], envs)
 
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()

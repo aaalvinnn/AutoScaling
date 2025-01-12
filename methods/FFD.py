@@ -1,4 +1,3 @@
-from env import config
 import numpy as np
 import copy
 
@@ -12,7 +11,7 @@ class FFD:
         :param Node_list: 场景中的服务器节点列表
         :param state: 当前状态，一个三通道矩阵
         """
-        self.config = config.EnvConfig()
+        self.w = 0.1
         self.MS_list = copy.deepcopy(MS_list)
         self.ms_image_list = copy.deepcopy(ms_image_list)
         self.Node_list = copy.deepcopy(Node_list)
@@ -53,7 +52,7 @@ class FFD:
         :return: 部署后的新state
         """
         # 按需求从大到小排序
-        w = self.config.weight_cpu_and_memory
+        w = self.w
         ms_list = sorted(self.MS_list, key=lambda ms: ms.cpu + w * ms.memory, reverse=True)
         
         # 遍历所有微服务，进行部署

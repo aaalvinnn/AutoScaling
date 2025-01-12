@@ -1,9 +1,10 @@
 import numpy as np
 import random
-from config import EnvConfig
+from configs import config_sin_smallscale, config_sin_middlescale, config_twitter_smallscale, config_twitter_middlescale, config_twitter_largescale
 
 
-config = EnvConfig()
+# config = EnvConfig()
+CONFIG = config_twitter_largescale.EnvConfig()
 
 #  ------------------------------------- TimeSlot -------------------------------------  #
 class TimeSlot(object):
@@ -47,12 +48,12 @@ class MSInstance(object):
     def __init__(
                 self,
                 id: int,
-                min_cpu: int = config.ms_min_cpu_resource,
-                max_cpu: int = config.ms_max_cpu_resource,
-                min_memory: int = config.ms_min_memory_resource,
-                max_memory: int = config.ms_max_memory_resource,
-                min_mu: int = config.ms_min_mu,
-                max_mu: int = config.ms_max_mu
+                min_cpu: int = CONFIG.ms_min_cpu_resource,
+                max_cpu: int = CONFIG.ms_max_cpu_resource,
+                min_memory: int = CONFIG.ms_min_memory_resource,
+                max_memory: int = CONFIG.ms_max_memory_resource,
+                min_mu: int = CONFIG.ms_min_mu,
+                max_mu: int = CONFIG.ms_max_mu
         ) -> None:
         self.id = id
         self.cpu = random.randint(min_cpu, max_cpu)
@@ -76,13 +77,13 @@ class Request(object):
     def __init__(
                 self,
                 id,
-                ms_nums = config.ms_nums,
-                min_chain_length = config.min_request_chain_length,
-                max_chain_length = config.max_request_chain_length,
-                min_request_T = config.min_request_T,
-                max_request_T = config.max_request_T,
-                min_lamda: int = config.ms_min_lamda,
-                max_lamda: int = config.ms_max_lamda,
+                ms_nums = CONFIG.ms_nums,
+                min_chain_length = CONFIG.min_request_chain_length,
+                max_chain_length = CONFIG.max_request_chain_length,
+                min_request_T = CONFIG.min_request_T,
+                max_request_T = CONFIG.max_request_T,
+                min_lamda: int = CONFIG.ms_min_lamda,
+                max_lamda: int = CONFIG.ms_max_lamda,
         ) -> None:
         self.id = id
         self.length = random.randint(min_chain_length, max_chain_length)
@@ -103,10 +104,10 @@ class Node(object):
     def __init__(
                 self,
                 id,
-                min_cpu: int = config.node_min_cpu_resource,
-                max_cpu: int = config.node_max_cpu_resource,
-                min_memory: int = config.node_min_memory_resource,
-                max_memory: int = config.node_max_memory_resource,
+                min_cpu: int = CONFIG.node_min_cpu_resource,
+                max_cpu: int = CONFIG.node_max_cpu_resource,
+                min_memory: int = CONFIG.node_min_memory_resource,
+                max_memory: int = CONFIG.node_max_memory_resource,
         ) -> None:
         self.id = id
         self.cpu = random.randint(min_cpu, max_cpu)

@@ -1,15 +1,15 @@
 from environment import DataCenterEnvironment
 from collections import defaultdict
 from matplotlib import pyplot as plt
-from env import config
 from datetime import datetime
 import os
 import numpy as np
 
-env_config = config.EnvConfig() 
+ 
 class LogHelper(object):
-    def __init__(self, agents):
+    def __init__(self, agents, envs):
         self.agents_name = agents
+        self.env_name = envs[0].config.config_name
         self.data = {f"{agent}": defaultdict(list) for agent in self.agents_name}
         self.ylabel_metrics = {
                         "y": "",
@@ -30,7 +30,7 @@ class LogHelper(object):
                         "request_success_rate": "",
                         "r": "",
                     }
-        self.save_path = os.path.join("test_output", datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"))
+        self.save_path = os.path.join("test_output", self.env_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"))
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
         
@@ -55,10 +55,10 @@ class LogHelper(object):
                 plt.xlabel("Time Slot")
                 plt.ylabel(f"{metric} ({self.ylabel_metrics[metric]})")
                 plt.legend(loc="best")
-                plt.grid(True)
                 plt.tight_layout()
                 # plt.show()
                 plt.savefig(os.path.join(self.save_path, f"{metric}.png"))
+                plt.close()
 
             else:
                 plt.figure(figsize=(10, 6))
@@ -69,10 +69,24 @@ class LogHelper(object):
                 plt.xlabel("Time Slot")
                 plt.ylabel(f"{metric} ({self.ylabel_metrics[metric]})")
                 plt.legend(loc="best")
-                plt.grid(True)
                 plt.tight_layout()
                 # plt.show()
                 plt.savefig(os.path.join(self.save_path, f"{metric}.png"))
+                plt.close()
+
+            if metric == "t_all" or metric == "cost" or metric == "y" or metric == "request_success_rate":
+                plt.figure(figsize=(10, 6))
+                # 计算每个 agent 的 metric 平均值（或总和等其他统计值）
+                y = []
+                for agent_name in self.agents_name:
+                    y.append(np.mean(self.data[agent_name][metric]))
+                x = np.arange(len(self.agents_name))
+                plt.bar(x, y, width=0.6, color="skyblue", alpha=0.8)
+                plt.xticks(x, self.agents_name, rotation=0)
+                plt.ylabel(f"{metric} ({self.ylabel_metrics[metric]})")
+                plt.tight_layout()
+                plt.savefig(os.path.join(self.save_path, f"{metric}_bar.png"))
+                plt.close()
     
     def save_data(self):
         for agent_name in self.agents_name:

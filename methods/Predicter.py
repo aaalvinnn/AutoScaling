@@ -1,5 +1,4 @@
 import numpy as np
-from env import config
 
 
 class SMAPredictor(object):

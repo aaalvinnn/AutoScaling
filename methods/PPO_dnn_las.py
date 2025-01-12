@@ -18,11 +18,12 @@ import os, sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
-from env import environment, config
-from methods import Predicter
+from env import environment
+from env.configs import config_sin_smallscale
 
 
-CONFIG = config.EnvConfig()
+# CONFIG = config.EnvConfig()
+CONFIG = config_sin_smallscale.EnvConfig()
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -34,7 +35,7 @@ class ActorCritic(nn.Module):
         super().__init__()
         self.node_nums = node_nums
         self.ms_nums = ms_nums
-        self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums, self.ms_nums*CONFIG.hitory_lamda_length]
+        self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums*CONFIG.history_lamda_length]
         self.delta = max_delta*2+1
         self.action_length = self.node_nums *self.ms_nums * self.delta
 
@@ -72,11 +73,11 @@ class ActorCritic(nn.Module):
         )
         res[:, fl[0]:fl[0]+fl[1]] = ob[:, 1, 0] / CONFIG.node_max_cpu_resource
         res[:, fl[0]+fl[1]:fl[0]+fl[1]+fl[2]] = ob[:, 2, 0] / CONFIG.node_max_memory_resource
-        res[:, fl[0]+fl[1]+fl[2]:fl[0]+fl[1]+fl[2]+fl[3]] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
-        for i in range(CONFIG.hitory_lamda_length):
-            l = fl[0]+fl[1]+fl[2]+fl[3] + self.ms_nums*i
-            r = fl[0]+fl[1]+fl[2]+fl[3] + self.ms_nums*(i+1)
-            res[:, l:r] = ob[:, 3, :, i+1] / CONFIG.estimated_max_lamda
+        # res[:, fl[0]+fl[1]+fl[2]:fl[0]+fl[1]+fl[2]+fl[3]] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
+        for i in range(CONFIG.history_lamda_length):
+            l = fl[0]+fl[1]+fl[2] + self.ms_nums*i
+            r = fl[0]+fl[1]+fl[2] + self.ms_nums*(i+1)
+            res[:, l:r] = ob[:, 4, :, i] / CONFIG.estimated_max_lamda
         
         # data = res.cpu().numpy()    #debug
         return res
@@ -146,7 +147,6 @@ def store_next_obs(obs: list, next_obs: tuple, step: int):
         obs[i][step] = torch.Tensor(next_obs[i]).to(CONFIG.device)
 
 def train(agent: PPOLasAgent):
-    CONFIG = config.EnvConfig()
     save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"), "PPO_dnn_las")
     writer = SummaryWriter(save_path)
 
@@ -207,19 +207,19 @@ def train(agent: PPOLasAgent):
             next_obs = torch.Tensor(next_obs).to(CONFIG.device)
             next_done = torch.Tensor(next_done).to(CONFIG.device)
 
-            total_reward.append(np.mean(reward))
-            total_y.append(np.mean(infos['y']))
-            total_Qt.append(np.mean(infos['Qt']))
-            total_delay["t_all"].append(np.mean(infos['t_all']))
-            total_delay["t_exe"].append(np.mean(infos['t_exe']))
-            total_delay["t_route"].append(np.mean(infos['t_route']))
-            total_vload.append(np.mean(infos['vload']))
-            total_ns.append(np.mean(infos['ns']))
-            total_cost.append(np.mean(infos['cost']))
-            total_node_using_num.append(np.mean(infos['node_using_num']))
-            total_image_nums.append(np.mean(infos['image_nums']))
-            total_rsr.append(np.mean(infos['request_success_rate']))
-            total_penalty.append(np.mean(infos['penalty']))
+            total_reward.append(np.mean(reward[0]))
+            total_y.append(np.mean(infos['y'][0]))
+            total_Qt.append(np.mean(infos['Qt'][0]))
+            total_delay["t_all"].append(np.mean(infos['t_all'][0]))
+            total_delay["t_exe"].append(np.mean(infos['t_exe'][0]))
+            total_delay["t_route"].append(np.mean(infos['t_route'][0]))
+            total_vload.append(np.mean(infos['vload'][0]))
+            total_ns.append(np.mean(infos['ns'][0]))
+            total_cost.append(np.mean(infos['cost'][0]))
+            total_node_using_num.append(np.mean(infos['node_using_num'][0]))
+            total_image_nums.append(np.mean(infos['image_nums'][0]))
+            total_rsr.append(np.mean(infos['request_success_rate'][0]))
+            total_penalty.append(np.mean(infos['penalty'][0]))
 
             if terminations[0]:
                 print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
@@ -236,6 +236,12 @@ def train(agent: PPOLasAgent):
                 writer.add_scalar("charts/image_nums", np.mean(total_image_nums), iteration)
                 writer.add_scalar("charts/rsr", np.mean(total_rsr), iteration)
                 writer.add_scalar("charts/penalty", np.sum(total_penalty), iteration)
+
+        agent.save(save_path, "model_dnn_las.pth")
+        # 保存测试环境(seed=1037)奖励最好的模型
+        if best_reward < np.sum(total_reward):
+            best_reward = np.sum(total_reward)
+            agent.save(save_path, "model_dnn_las_best.pth")
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -327,11 +333,6 @@ def train(agent: PPOLasAgent):
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
-
-        agent.save(save_path, "model_dnn.pth")
-        if best_reward < np.sum(total_reward):
-            best_reward = np.sum(total_reward)
-            agent.save(save_path, "model_dnn_best.pth")
 
     envs.close()
     writer.close()

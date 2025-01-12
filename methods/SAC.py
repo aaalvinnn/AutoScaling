@@ -13,10 +13,11 @@ import collections
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
-from env import environment, config
+from env import environment, config, config_sin_smallscale
 
 
-CONFIG = config.EnvConfig()
+# CONFIG = config.EnvConfig()
+CONFIG = config_sin_smallscale.EnvConfig()
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -43,7 +44,7 @@ class ActorCritic(nn.Module):
         super().__init__()
         self.node_nums = node_nums
         self.ms_nums = ms_nums
-        self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums]
+        self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums*CONFIG.history_lamda_length]
         self.delta = max_delta*2+1
 
         self.dnn = nn.Sequential(
@@ -73,15 +74,17 @@ class ActorCritic(nn.Module):
 
         res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / min(
             CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
-            CONFIG.node_min_cpu_resource / CONFIG.ms_min_cpu_resource,
-            CONFIG.node_max_memory_resource / CONFIG.ms_max_memory_resource,
             CONFIG.node_min_memory_resource / CONFIG.ms_min_memory_resource
         )
         res[:, fl[0]:fl[0]+fl[1]] = ob[:, 1, 0] / CONFIG.node_max_cpu_resource
         res[:, fl[0]+fl[1]:fl[0]+fl[1]+fl[2]] = ob[:, 2, 0] / CONFIG.node_max_memory_resource
-        res[:, fl[0]+fl[1]+fl[2]:] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
+        # res[:, fl[0]+fl[1]+fl[2]:fl[0]+fl[1]+fl[2]+fl[3]] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
+        for i in range(CONFIG.history_lamda_length):
+            l = fl[0]+fl[1]+fl[2] + self.ms_nums*i
+            r = fl[0]+fl[1]+fl[2] + self.ms_nums*(i+1)
+            res[:, l:r] = ob[:, 3, :, i] / CONFIG.estimated_max_lamda
         
-        data = res.cpu().numpy()    #debug
+        # data = res.cpu().numpy()    #debug
         return res
 
     def get_value(self, ob):
@@ -214,7 +217,6 @@ class SACAgent:
 
 
 def train(agent: SACAgent):
-    CONFIG = config.EnvConfig()
     save_path = os.path.join(CONFIG.model_path, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"), "SAC")
     writer = SummaryWriter(save_path)
 

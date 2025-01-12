@@ -1,7 +1,6 @@
 import numpy as np
 from datastruct import *
 import gymnasium as gym
-from config import EnvConfig
 from methods import FFD, Predicter
 import math
 import copy
@@ -12,7 +11,7 @@ class DataCenterEnvironment(gym.Env):
     def __init__(
             self,
             id: int,
-            env_config: EnvConfig,
+            env_config
             ):
         """ 初始化参数 """
         super(DataCenterEnvironment, self).__init__()
@@ -39,7 +38,7 @@ class DataCenterEnvironment(gym.Env):
         self.Qt = None  # 积压量
         # 动作、状态空间
         self.state = None   # to be filled in reset()
-        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(4, self.ms_nums, self.server_node_nums), dtype=np.float32)
+        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(7, self.ms_nums, self.server_node_nums), dtype=np.float32)
         if self.config.is_las:
             self.action_space = gym.spaces.Discrete(self.server_node_nums * self.ms_nums * (self.config.max_instance_update_num * 2 + 1))
         else:
@@ -78,7 +77,7 @@ class DataCenterEnvironment(gym.Env):
             "cpus": np.zeros(self.server_node_nums),
             "memories": np.zeros(self.server_node_nums),
             "predicted_lamda": np.zeros(self.ms_nums),
-            "history_lamda": np.zeros((self.config.hitory_lamda_length, self.ms_nums))
+            "history_lamda": np.zeros((self.config.history_lamda_length, self.ms_nums))
         }
         for node_idx in range(self.server_node_nums):
             node = self.Node_list[node_idx]
@@ -105,13 +104,20 @@ class DataCenterEnvironment(gym.Env):
     
     def get_observation(self):
         """ 返回状态副本的元组 """
-        res = np.zeros((4,) + self.state["deploy_info"].shape)
+        res = np.zeros(self.observation_space.shape)
         res[0] = self.state["deploy_info"]
         res[1] = self.state["cpus"]
         res[2] = self.state["memories"]
-        res[3][:,0] = self.state["predicted_lamda"]    # 第一项放预测值
+        res[3][:,0] = self.state["predicted_lamda"]
+        # 用两个矩阵来储存历史的到达率
         for i in range(len(self.state["history_lamda"])):
-            res[3][:,i + 1] = self.state["history_lamda"][i]
+            if i < self.server_node_nums:
+                res[4][:,i] = self.state["history_lamda"][i]
+            else:
+                res[5][:,i-self.server_node_nums] = self.state["history_lamda"][i]
+        # 储存当前step，转化为one-hot编码
+        now_step_one_hot = math.floor((self.timeslot.get_now() - self.timeslot.start)* self.config.history_step_length/self.timeslot.get_slot_length() )
+        res[6][now_step_one_hot//res.shape[2],now_step_one_hot%res.shape[1]] = 1
 
         return res
 
@@ -162,7 +168,7 @@ class DataCenterEnvironment(gym.Env):
         penalty = 0
 
         # 若输入动作为一个整数：（node_id * ms_id * delta）
-        if isinstance(action, int) or len(action) == 0:
+        if isinstance(action, np.int64):
             max_delta_size = self.config.max_instance_update_num*2+1
             delta = action % max_delta_size - self.config.max_instance_update_num
             ms_idx = (action // max_delta_size) % self.ms_nums
@@ -172,6 +178,10 @@ class DataCenterEnvironment(gym.Env):
 
             for _ in range(abs(delta)):
                 if node.is_resource_enough(ms, np.sign(delta)):
+                    # # 若是一个新的服务器节点，则增加惩罚
+                    # if len(node.ms_instance_list) == 0:
+                    #     penalty += self.config.penalty/5
+
                     # 更新self.Node_list
                     cpu, memory = node.delpoy(ms, np.sign(delta))
                     # 更新self.state
@@ -196,6 +206,10 @@ class DataCenterEnvironment(gym.Env):
 
             for _ in range(abs(delta)):
                 if node.is_resource_enough(ms, np.sign(delta)):
+                    # # 若是一个新的服务器节点，则增加惩罚
+                    # if len(node.ms_instance_list) == 0:
+                    #     penalty += self.config.penalty/5
+
                     # 更新self.Node_list
                     cpu, memory = node.delpoy(ms, np.sign(delta))
                     # 更新self.state
@@ -224,6 +238,10 @@ class DataCenterEnvironment(gym.Env):
                     
                     for _ in range(abs(delta)):
                         if node.is_resource_enough(ms, np.sign(delta)):
+                            # # 若是一个新的服务器节点，则增加惩罚
+                            # if len(node.ms_instance_list) == 0:
+                            #     penalty += self.config.penalty/5
+
                             # 更新self.Node_list
                             cpu, memory = node.delpoy(ms, np.sign(delta))
                             # 更新self.state
@@ -247,7 +265,7 @@ class DataCenterEnvironment(gym.Env):
             # 预测值
             self.state["predicted_lamda"][ms_idx] = lamda[ms_idx]
             # 历史值
-            for i in range(min(self.config.hitory_lamda_length, self.predicter.get_buffer_len())):
+            for i in range(min(self.config.history_lamda_length, self.predicter.get_buffer_len())):
                 self.state["history_lamda"][i][ms_idx] = self.predicter.buffer[-i][ms_idx]
 
         pass
@@ -541,8 +559,11 @@ class DataCenterEnvironment(gym.Env):
         # 状态转移
         self.timeslot.add_time()
         # reward = 目标函数 + 异常动作惩罚 + 请求成功率奖励
-        y = self.config.w_ns_and_delay*(10*np.log1p(cost*Qt)) + np.mean(t_total_list)
-        reward = -y + penalty + 50 * request_success_rate
+        y = self.config.w_ns_and_delay*(5*np.log1p(cost*Qt)) + np.mean(t_total_list)
+        # y = self.config.w_ns_and_delay*cost + np.mean(t_total_list)
+        # y = self.config.w_ns_and_delay*cost*Qt + np.mean(t_total_list)    # test use
+        # y = self.config.w_ns_and_delay*((5*np.log1p(cost*Qt))+cost) + np.mean(t_total_list)   # training use
+        reward = -2*y + penalty + 100*request_success_rate
 
         # # debug
         # if Qt > 0:
