@@ -4,6 +4,7 @@ import gymnasium as gym
 from methods import FFD, Predicter
 import math
 import copy
+import torch
 
 class DataCenterEnvironment(gym.Env):
     """ 数据中心场景 """
@@ -11,7 +12,8 @@ class DataCenterEnvironment(gym.Env):
     def __init__(
             self,
             id: int,
-            env_config
+            env_config,
+            is_train = False,
             ):
         """ 初始化参数 """
         super(DataCenterEnvironment, self).__init__()
@@ -19,6 +21,7 @@ class DataCenterEnvironment(gym.Env):
         self.id = id
         self.seed = env_config.seed
         self.config = env_config
+        self.is_train = is_train
         self.timeslot = TimeSlot(self.config.time_slot_start, self.config.time_slot_end)
         self.ms_nums = self.config.ms_nums
         self.ms_image_list = env_config.init_ms_image_list
@@ -50,8 +53,12 @@ class DataCenterEnvironment(gym.Env):
         pass
 
     def _reset_seed(self, seed):
+        self.seed = seed
         random.seed(seed)
         np.random.seed(seed)
+        if not self.is_train:
+            torch.manual_seed(seed)
+            torch.backends.cudnn.deterministic = True
 
     def _reset_datastruct(self):
         """ 重置数据结构  """
@@ -470,7 +477,10 @@ class DataCenterEnvironment(gym.Env):
                 self.MS_list[ms_idx].lamda += request.lamda
 
     def _update_Qt(self, cost):
-        self.Qt = max(self.Qt+cost-self.C, 0)
+        # self.Qt = max(self.Qt+cost-self.C, 0)
+        Q_max = self.config.Q_max
+        Q_min = self.config.Q_min
+        self.Qt = max(min(self.Qt + cost - self.C, Q_max), Q_min)
         return self.Qt
 
     def _cal_cost(self, ns, nodes):
@@ -558,12 +568,16 @@ class DataCenterEnvironment(gym.Env):
 
         # 状态转移
         self.timeslot.add_time()
+        y = 0
         # reward = 目标函数 + 异常动作惩罚 + 请求成功率奖励
-        y = self.config.w_ns_and_delay*(5*np.log1p(cost*Qt)) + np.mean(t_total_list)
-        # y = self.config.w_ns_and_delay*cost + np.mean(t_total_list)
-        # y = self.config.w_ns_and_delay*cost*Qt + np.mean(t_total_list)    # test use
-        # y = self.config.w_ns_and_delay*((5*np.log1p(cost*Qt))+cost) + np.mean(t_total_list)   # training use
-        reward = -2*y + penalty + 100*request_success_rate
+        if self.is_train:
+            # y = self.config.w_ns_and_delay*((np.log1p(cost*Qt))+cost) + np.mean(t_total_list)   # training use
+            y = self.config.w_ns_and_delay*cost*Qt + np.mean(t_total_list)
+        else:
+            y = self.config.w_ns_and_delay*cost*Qt + np.mean(t_total_list)    # test use
+        # reward = -y + penalty + 50*request_success_rate
+        reward = -y + penalty + 30
+        # print(reward)
 
         # # debug
         # if Qt > 0:
