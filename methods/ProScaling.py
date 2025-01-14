@@ -61,7 +61,7 @@ class ProScalingAgent(object):
             image_num = np.sum(pre_deploy_info[ms.id])
             lamda = predict_lamda_list[ms.id] - image_num * ms.mu
             if lamda > 0:
-                for delta in range(self.actoin_space_dim[2]//2, self.actoin_space_dim[2]):
+                for delta in range(self.actoin_space_dim[2]//2+1, self.actoin_space_dim[2]):
                     node, tau_min = self.greedy_device_chosen(ms, self.Um, pre_deploy_info, delta)
                     tau_all_list.append(tau_min)
                     if tau_min < tau:
