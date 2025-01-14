@@ -19,11 +19,11 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 from env import environment
-from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_smallscale, config_twitter_middlescale, config_twitter_largescale
+from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_smallscale, config_twitter_middlescale, config_twitter_largescale, config_twitter_middlescale_v2, config_twitter_smallscale_v2
 
 
 # CONFIG = config.EnvConfig()
-CONFIG = config_twitter_largescale.EnvConfig()
+CONFIG = config_twitter_smallscale_v2.EnvConfig()
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -187,7 +187,7 @@ class PPOAgent(object):
 
 def make_env(env_id, config):
     def thunk():
-        env = environment.DataCenterEnvironment(env_id, config)
+        env = environment.DataCenterEnvironment(env_id, config, True)
         return env
 
     return thunk
@@ -236,7 +236,7 @@ def train(agent: PPOAgent):
         total_image_nums = []
         total_rsr = []  # 请求成功率
         total_penalty = []
-        next_obs, _ = envs.reset(seed=CONFIG.seed)
+        next_obs, _ = envs.reset(seed=CONFIG.seed)  # 这里重置了torch的随机种子
         next_obs = torch.Tensor(next_obs).to(CONFIG.device)
         next_done = torch.zeros(CONFIG.num_envs).to(CONFIG.device)
         for step in range(0, CONFIG.num_steps):
@@ -258,19 +258,19 @@ def train(agent: PPOAgent):
             next_obs = torch.Tensor(next_obs).to(CONFIG.device)
             next_done = torch.Tensor(next_done).to(CONFIG.device)
 
-            total_reward.append(np.mean(reward[0]))
-            total_y.append(np.mean(infos['y'][0]))
-            total_Qt.append(np.mean(infos['Qt'][0]))
-            total_delay["t_all"].append(np.mean(infos['t_all'][0]))
-            total_delay["t_exe"].append(np.mean(infos['t_exe'][0]))
-            total_delay["t_route"].append(np.mean(infos['t_route'][0]))
-            total_vload.append(np.mean(infos['vload'][0]))
-            total_ns.append(np.mean(infos['ns'][0]))
-            total_cost.append(np.mean(infos['cost'][0]))
-            total_node_using_num.append(np.mean(infos['node_using_num'][0]))
-            total_image_nums.append(np.mean(infos['image_nums'][0]))
-            total_rsr.append(np.mean(infos['request_success_rate'][0]))
-            total_penalty.append(np.mean(infos['penalty'][0]))
+            total_reward.append(np.mean(reward))
+            total_y.append(np.mean(infos['y']))
+            total_Qt.append(np.mean(infos['Qt']))
+            total_delay["t_all"].append(np.mean(infos['t_all']))
+            total_delay["t_exe"].append(np.mean(infos['t_exe']))
+            total_delay["t_route"].append(np.mean(infos['t_route']))
+            total_vload.append(np.mean(infos['vload']))
+            total_ns.append(np.mean(infos['ns']))
+            total_cost.append(np.mean(infos['cost']))
+            total_node_using_num.append(np.mean(infos['node_using_num']))
+            total_image_nums.append(np.mean(infos['image_nums']))
+            total_rsr.append(np.mean(infos['request_success_rate']))
+            total_penalty.append(np.mean(infos['penalty']))
 
             if terminations[0]:
                 print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
@@ -393,7 +393,7 @@ def train(agent: PPOAgent):
     print("success")
 
 if __name__ == "__main__":
-    _env = environment.DataCenterEnvironment(-1, CONFIG)    # 只用于定义agent，不参与实际训练
+    _env = environment.DataCenterEnvironment(-1, CONFIG, True)    # 只用于定义agent，不参与实际训练
     agent = PPOAgent(_env, CONFIG)
     # agent.load("model/0103")
     train(agent)
