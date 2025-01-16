@@ -19,11 +19,11 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 from env import environment
-from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_smallscale, config_twitter_middlescale, config_twitter_largescale, config_twitter_middlescale_v2, config_twitter_smallscale_v2
+from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
 
 
 # CONFIG = config.EnvConfig()
-CONFIG = config_twitter_smallscale_v2.EnvConfig()
+CONFIG = config_twitter_largescale.EnvConfig()
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -37,6 +37,8 @@ class ActorCritic(nn.Module):
         self.ms_nums = ms_nums
         self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums*CONFIG.history_lamda_length, CONFIG.history_step_length]
         self.delta = max_delta*2+1
+        # params = torch.ones(3, requires_grad=True)  # 动作三个维度不同损失的权重
+        # self.params = torch.nn.Parameter(params)
 
         self.dnn = nn.Sequential(
             layer_init(nn.Linear(np.sum(self.feature_length_list), 512)),
@@ -51,29 +53,17 @@ class ActorCritic(nn.Module):
             nn.ReLU(),
             layer_init(nn.Linear(512, 512)),
             nn.ReLU(),
+            # layer_init(nn.Linear(512, 512)),
+            # nn.ReLU(),
 
         )
 
-        # Actor heads (discrete actions)
-        # self.actor_nodeIdx = nn.Sequential(
-        #     layer_init(nn.Linear(512, 512)),
-        #     nn.ReLU(),
-        #     layer_init(nn.Linear(512, self.node_nums), std=0.01)
-        # )
-        # self.actor_msIdx = nn.Sequential(
-        #     layer_init(nn.Linear(512, 512)),
-        #     nn.ReLU(),
-        #     layer_init(nn.Linear(512, self.ms_nums), std=0.01)
-        # )
-        # self.actor_delta = nn.Sequential(
-        #     layer_init(nn.Linear(512, 512)),
-        #     nn.ReLU(),
-        #     layer_init(nn.Linear(512, self.delta), std=0.01)
-        # )
-        
-        self.actor_nodeIdx = layer_init(nn.Linear(512, self.node_nums), std=0.01)
-        self.actor_msIdx = layer_init(nn.Linear(512, self.ms_nums), std=0.01)
-        self.actor_delta = layer_init(nn.Linear(512, self.delta), std=0.01)
+        # Actor network
+        self.actors = nn.ModuleList([
+            layer_init(nn.Linear(512, self.node_nums), std=0.01),
+            layer_init(nn.Linear(512, self.ms_nums), std=0.01),
+            layer_init(nn.Linear(512, self.delta), std=0.01)
+        ])
 
         # Critic for value function
         self.critic = nn.Sequential(
@@ -122,46 +112,37 @@ class ActorCritic(nn.Module):
         # Process DNN inputs
         features = self.dnn(ob)
 
-        # Discrete action logits
-        logits_nodeIdx = self.actor_nodeIdx(features)
-        logits_msIdx = self.actor_msIdx(features)
-        logits_delta = self.actor_delta(features)
+        # Discrete action logits from actors
+        logits = [actor(features) for actor in self.actors]  # logits[0] -> nodeIdx, logits[1] -> msIdx, logits[2] -> delta
 
-        # Probabilities
-        probs_nodeIdx = Categorical(logits=logits_nodeIdx)
-        probs_msIdx = Categorical(logits=logits_msIdx)
-        probs_delta = Categorical(logits=logits_delta)
+
+        # Probabilities for each action
+        probs = [Categorical(logits=logit) for logit in logits]  # List of Categorical distributions
+
 
         if action is None:
             # Sample actions
-            action_nodeIdx = probs_nodeIdx.sample()
-            action_msIdx = probs_msIdx.sample()
-            action_delta = probs_delta.sample()
+            action = torch.stack([prob.sample() for prob in probs], dim=-1)  # Stack the actions for each part
 
-            # Combine actions
-            action = torch.stack([action_nodeIdx, action_msIdx, action_delta], dim=-1)
-        else:
-            action_nodeIdx = action[:, 0]
-            action_msIdx = action[:, 1]
-            action_delta = action[:, 2]
-
-        # Log probabilities，同等权重的直接相加
-        logprob_nodeIdx = probs_nodeIdx.log_prob(action_nodeIdx)
-        logprob_msIdx = probs_msIdx.log_prob(action_msIdx)
-        logprob_delta = probs_delta.log_prob(action_delta)
-        logprob = logprob_nodeIdx + logprob_msIdx + logprob_delta
+        # Log probabilities and Entropies
+        # logprob = 0
+        # entropy = 0
+        # for i, prob in enumerate(probs):
+        #     logprob += 0.5 / (self.params[i]**2) * prob.log_prob(action[:, i]) + torch.log(1+self.params[i]**2)
+        #     entropy += 0.5 / (self.params[i]**2) * prob.entropy() + torch.log(1+self.params[i]**2)
+        logprob = sum([prob.log_prob(action[:, i]) for i, prob in enumerate(probs)])
+        # print([prob.log_prob(action[:, i]) for i, prob in enumerate(probs)])
 
         # Entropies
-        entropy = probs_nodeIdx.entropy() + probs_msIdx.entropy() + probs_delta.entropy()
+        entropy = sum([prob.entropy() for prob in probs])
 
         return action, logprob, entropy, self.critic(features)
 
 class PPOAgent(object):
-    def __init__(self, env: environment.DataCenterEnvironment, config: config_sin_smallscale.EnvConfig):
+    def __init__(self, config: config_sin_smallscale.EnvConfig):
         # Basic config
-        self.env = env
         self.config = config
-        self.actorcrtic = ActorCritic(env.server_node_nums, env.ms_nums, config.max_instance_update_num).to(CONFIG.device)
+        self.actorcrtic = ActorCritic(self.config.node_nums, self.config.ms_nums, self.config.max_instance_update_num).to(CONFIG.device)
         self.optimizer = optim.Adam(self.actorcrtic.parameters(), lr=config.lr, eps=1e-5)
 
     def save(self, path, name):
@@ -196,15 +177,16 @@ def store_next_obs(obs: list, next_obs: tuple, step: int):
     for i in range(4):
         obs[i][step] = torch.Tensor(next_obs[i]).to(CONFIG.device)
 
-def train(agent: PPOAgent):
-    save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "PPO_dnn")
-    writer = SummaryWriter(save_path)
-
+def seed_all(seed):
     # TRY NOT TO MODIFY: seeding
     random.seed(CONFIG.seed)
     np.random.seed(CONFIG.seed)
     torch.manual_seed(CONFIG.seed)
     torch.backends.cudnn.deterministic = True
+    
+def train(agent: PPOAgent):
+    save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "PPO_dnn")
+    writer = SummaryWriter(save_path)
 
     envs = gym.vector.AsyncVectorEnv(
         [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
@@ -232,6 +214,8 @@ def train(agent: PPOAgent):
         total_vload = []
         total_ns = []
         total_cost = []
+        total_s_cost = []
+        total_d_cost = []
         total_node_using_num = []
         total_image_nums = []
         total_rsr = []  # 请求成功率
@@ -267,6 +251,8 @@ def train(agent: PPOAgent):
             total_vload.append(np.mean(infos['vload']))
             total_ns.append(np.mean(infos['ns']))
             total_cost.append(np.mean(infos['cost']))
+            total_s_cost.append(np.mean(infos['static_cost']))
+            total_d_cost.append(np.mean(infos['dynamic_cost']))
             total_node_using_num.append(np.mean(infos['node_using_num']))
             total_image_nums.append(np.mean(infos['image_nums']))
             total_rsr.append(np.mean(infos['request_success_rate']))
@@ -283,6 +269,8 @@ def train(agent: PPOAgent):
                 writer.add_scalar("charts/vload", np.mean(total_vload), iteration)
                 writer.add_scalar("charts/ns", np.sum(total_ns), iteration)
                 writer.add_scalar("charts/cost", np.mean(total_cost), iteration)
+                writer.add_scalar("charts/s_cost", np.mean(total_s_cost), iteration)
+                writer.add_scalar("charts/d_cost", np.mean(total_d_cost), iteration)
                 writer.add_scalar("charts/node_using_num", np.mean(total_node_using_num), iteration)
                 writer.add_scalar("charts/image_nums", np.mean(total_image_nums), iteration)
                 writer.add_scalar("charts/rsr", np.mean(total_rsr), iteration)
@@ -393,7 +381,6 @@ def train(agent: PPOAgent):
     print("success")
 
 if __name__ == "__main__":
-    _env = environment.DataCenterEnvironment(-1, CONFIG, True)    # 只用于定义agent，不参与实际训练
-    agent = PPOAgent(_env, CONFIG)
-    # agent.load("model/0103")
+    seed_all(CONFIG.seed)
+    agent = PPOAgent(CONFIG)
     train(agent)

@@ -19,7 +19,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 from env import environment
-from env.configs import config_sin_smallscale, config_twitter_smallscale, config_twitter_middlescale
+from env.configs import config_sin_smallscale
 
 
 # CONFIG = config.EnvConfig()

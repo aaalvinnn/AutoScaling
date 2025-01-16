@@ -25,7 +25,7 @@ class EnvConfig:
         # 微服务配置
         self.ms_nums = 5
         self.init_ms_image_list = [3 for _ in range(self.ms_nums)]    # 初始的各个微服务实例数量
-        self.max_instance_update_num = 1
+        self.max_instance_update_num = 2
         self.ms_min_cpu_resource = 1
         self.ms_max_cpu_resource = 2
         self.ms_min_memory_resource = 10
@@ -38,23 +38,25 @@ class EnvConfig:
         self.ms2ms_max_data = 10
 
         # 用户、请求链配置
-        self.request_flow_nums = 3
+        self.request_flow_nums = 4
         self.min_request_chain_length = 3
         self.max_request_chain_length = min(5, self.ms_nums)
-        self.estimated_max_lamda = 25
+        self.estimated_max_lamda = 35
         self.init_lamda = 15
         self.min_request_T = 30     # 最大请求时延约束
-        self.max_request_T = 50     # 最大请求时延约束
+        self.max_request_T = 60     # 最大请求时延约束
         self.data_path = "data/loads-sin.txt"
 
         # 开销
-        self.cost_w_list = (0.2, 1, 1)
+        self.cost_w_list = (0.2, 2, 1)
         self.C = 15     # 服务提供商给出的时间平均长期开销预算
+        self.Q_max = 8
+        self.Q_min = 0
 
         # 模型、算法配置
         self.predicter_window_size = 10
         self.history_lamda_length = min(10, self.node_nums*self.ms_nums)   # 记录的历史到达率，长度不能大于(self.node_nums*self.ms_nums)，否则无法储存于tensor中；用于模型训练的状态输入
-        self.history_step_length = min(10, self.node_nums*self.ms_nums)
+        self.history_step_length = min(self.node_nums, self.node_nums*self.ms_nums)
         self.lr = 5e-6
         self.gamma = 0.99
         self.gae_lambda = 0.95
@@ -67,11 +69,11 @@ class EnvConfig:
         self.norm_adv = True
 
         # 训练配置
-        self.device = "cpu"
+        self.device = "cuda:1"
         self.model_path = "model"
         self.is_las = False  # 是否展平输出而不采用多输出头
         self.num_steps = self.time_slot_end - self.time_slot_start
-        self.num_envs = 16
+        self.num_envs = 32
         self.batch_size = int(self.num_envs * self.num_steps)
         self.num_minibatches = 4
         self.minibatch_size = int(self.batch_size // self.num_minibatches)
@@ -80,7 +82,7 @@ class EnvConfig:
         self.num_iterations = self.total_timesteps // self.batch_size
 
         # 奖励配置
-        self.penalty = -50
-        self.w_ns_and_delay = 1
+        self.penalty = -10
+        self.w_ns_and_delay = 0.1
 
 

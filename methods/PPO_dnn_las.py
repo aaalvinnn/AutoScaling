@@ -19,11 +19,11 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 from env import environment
-from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_smallscale, config_twitter_middlescale, config_twitter_largescale, config_twitter_middlescale_v2, config_twitter_smallscale_v2
+from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_middlescale, config_twitter_smallscale
 
 
 # CONFIG = config.EnvConfig()
-CONFIG = config_twitter_smallscale_v2.EnvConfig()
+CONFIG = config_twitter_smallscale.EnvConfig()
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
