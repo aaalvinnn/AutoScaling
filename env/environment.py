@@ -486,7 +486,10 @@ class DataCenterEnvironment(gym.Env):
     def _cal_cost(self, ns, nodes):
         """ 计算开销 """
         (w1, w2, w3) = self.config.cost_w_list
-        return w1*np.sum(self.ms_image_list) + w2*ns + w3*nodes
+        static_cost = w1*np.sum(self.ms_image_list) + w3*nodes
+        dynamic_cost = w2*abs(ns)
+
+        return static_cost+dynamic_cost, static_cost, dynamic_cost
     
     def _cal_node_using_num(self):
         num = 0
@@ -559,7 +562,7 @@ class DataCenterEnvironment(gym.Env):
 
         t_total_list, t_exe_list, t_route_list = self.cal_total_access_delay(self.state["deploy_info"])
         node_using_num = self._cal_node_using_num()
-        cost = self._cal_cost(ns, node_using_num)
+        cost, s_cost, d_cost = self._cal_cost(ns, node_using_num)
         Qt = self._update_Qt(cost)
         request_success_rate = self._cal_request_success_rate(t_total_list)
         vload = self._cal_load_variance(0.5)
@@ -576,7 +579,7 @@ class DataCenterEnvironment(gym.Env):
         else:
             y = self.config.w_ns_and_delay*cost*Qt + np.mean(t_total_list)    # test use
         # reward = -y + penalty + 50*request_success_rate
-        reward = -y + penalty + 30
+        reward = -y + 30
         # print(reward)
 
         # # debug
@@ -609,6 +612,8 @@ class DataCenterEnvironment(gym.Env):
             "vload": vload,
             "ns": ns,
             "cost": cost,
+            "static_cost": s_cost,
+            "dynamic_cost": d_cost,
             "Qt": Qt,
             "penalty": penalty/(self.config.penalty+1e-6),
             "node_using_num": node_using_num,
