@@ -57,7 +57,7 @@ class EnvConfig:
         self.predicter_window_size = 10
         self.history_lamda_length = min(10, self.node_nums*self.ms_nums)   # 记录的历史到达率，长度不能大于(self.node_nums*self.ms_nums)，否则无法储存于tensor中；用于模型训练的状态输入
         self.history_step_length = min(10, self.node_nums*self.ms_nums)
-        self.lr = 5e-6
+        self.lr = 5e-5
         self.gamma = 0.99
         self.gae_lambda = 0.95
         self.update_epochs = 10
@@ -69,7 +69,7 @@ class EnvConfig:
         self.norm_adv = True
 
         # 训练配置
-        self.device = "cuda:2"
+        self.device = "cuda:1"
         self.model_path = "model"
         self.is_las = False  # 是否展平输出而不采用多输出头
         self.num_steps = self.time_slot_end - self.time_slot_start
@@ -82,7 +82,7 @@ class EnvConfig:
         self.num_iterations = self.total_timesteps // self.batch_size
 
         # 奖励配置
-        self.penalty = -10
-        self.w_ns_and_delay = 0.15
+        self.penalty = -5
+        self.w_ns_and_delay = 0.1
 
 

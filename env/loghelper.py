@@ -46,7 +46,7 @@ class LogHelper(object):
 
     def visualize(self):
         for metric in self.ylabel_metrics.keys():
-            if metric == "t_all" or metric == "t_exe" or metric == "t_route" or metric == "request_success_rate" or metric == "y" or metric == "dynamic_cost":
+            if metric == "t_all" or metric == "t_exe" or metric == "t_route" or metric == "request_success_rate" or metric == "y" or metric == "dynamic_cost" or metric == "ns":
                 plt.figure(figsize=(10, 6))
                 for agent_name in self.agents_name:
                     if metric in self.data[agent_name]:

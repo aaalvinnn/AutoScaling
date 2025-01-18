@@ -41,33 +41,34 @@ class ActorCritic(nn.Module):
         # self.params = torch.nn.Parameter(params)
 
         self.dnn = nn.Sequential(
-            layer_init(nn.Linear(np.sum(self.feature_length_list), 512)),
+            layer_init(nn.Linear(np.sum(self.feature_length_list), 2048)),
             nn.ReLU(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(2048, 2048)),
             nn.ReLU(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(2048, 2048)),
             nn.ReLU(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(2048, 2048)),
             nn.ReLU(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(2048, 2048)),
             nn.ReLU(),
-            layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(2048, 2048)),
             nn.ReLU(),
-            # layer_init(nn.Linear(512, 512)),
+            layer_init(nn.Linear(2048, 2048)),
+            nn.ReLU(),
+            # layer_init(nn.Linear(2048, 2048)),
             # nn.ReLU(),
-
         )
 
         # Actor network
         self.actors = nn.ModuleList([
-            layer_init(nn.Linear(512, self.node_nums), std=0.01),
-            layer_init(nn.Linear(512, self.ms_nums), std=0.01),
-            layer_init(nn.Linear(512, self.delta), std=0.01)
+            layer_init(nn.Linear(2048, self.node_nums), std=0.01),
+            layer_init(nn.Linear(2048, self.ms_nums), std=0.01),
+            layer_init(nn.Linear(2048, self.delta), std=0.01)
         ])
 
         # Critic for value function
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(512, 1)),
+            layer_init(nn.Linear(2048, 1)),
         )
 
     def _standardize_state(self, ob) -> torch.Tensor:
@@ -153,7 +154,7 @@ class PPOAgent(object):
         torch.save(self.actorcrtic.state_dict(), save_path)
 
     def load(self, path):
-        load_path = os.path.join(path, "model_dnn_best.pth")
+        load_path = os.path.join(path, "model_dnn.pth")
         self.actorcrtic.load_state_dict(torch.load(load_path, weights_only=True))
 
     def get_action(self, ob):

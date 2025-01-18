@@ -579,7 +579,7 @@ class DataCenterEnvironment(gym.Env):
         else:
             y = self.config.w_ns_and_delay*cost*Qt + np.mean(t_total_list)    # test use
         # reward = -y + penalty + 50*request_success_rate
-        reward = -y + 30
+        reward = -y + 30 + penalty
         # print(reward)
 
         # # debug

@@ -49,7 +49,7 @@ class TestHelper(object):
 
 
 if __name__ == '__main__':
-    env_config = config_twitter_smallscale.EnvConfig()
+    env_config = config_twitter_largescale.EnvConfig()
     predicter = Predicter.SMAPredictor(env_config.ms_nums, env_config.predicter_window_size)
 
     # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
@@ -91,7 +91,7 @@ if __name__ == '__main__':
 
     envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
     ppoAgent2 = PPO_dnn.PPOAgent(env_config)
-    ppoAgent2.load("model/twitter_smallscale_v2/0116/1037/PPO_dnn")
+    ppoAgent2.load("model/twitter_largescale/0118/1233/PPO_dnn")
     agents = [NoScaling.NoScalingAgent(envs[0]),
               RandomScaling.RandomScalingAgent(envs[1]),
               ProScaling.ProScalingAgent(envs[2]),
