@@ -355,6 +355,10 @@ class DataCenterEnvironment(gym.Env):
                 wq = lq / lamda
                 t_exe += wq + 1/ms.mu*(image_num/np.sum(image_num_list))    # 1/ms.mu 是平均处理时间
 
+            # 如果计算出的时延大于该请求的最大时延约束
+            if t_exe > request.T_max:
+                t_exe = request.T_max
+
             t_exe_list.append(t_exe)
 
         # debug
