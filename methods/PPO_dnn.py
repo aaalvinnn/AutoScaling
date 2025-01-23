@@ -94,7 +94,6 @@ class ActorCritic(nn.Module):
                 res[:, l:r] = ob[:, 5, :, i-self.node_nums] / CONFIG.estimated_max_lamda
         
         for i in range(CONFIG.history_step_length):
-            if i < self.node_nums:
                 res[:, fl[0]+fl[1]+fl[2]+fl[3]+i] = ob[:, 6, i//self.node_nums, i%self.ms_nums]
         
         # _ = ob.cpu().numpy()
