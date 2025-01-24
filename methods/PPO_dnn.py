@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 from dataclasses import dataclass
 import copy
+import shutil, inspect
 
 import gymnasium as gym
 import numpy as np
@@ -173,9 +174,16 @@ def make_env(env_id, config):
 
     return thunk
 
-def store_next_obs(obs: list, next_obs: tuple, step: int):
-    for i in range(4):
-        obs[i][step] = torch.Tensor(next_obs[i]).to(CONFIG.device)
+def save_config(save_path):
+    save_path = os.path.join(save_path, "config")
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    script_path = os.path.abspath(__file__)
+    config_path = inspect.getfile(CONFIG.__class__)
+
+    shutil.copy(script_path, save_path)
+    shutil.copy(config_path, save_path)
 
 def seed_all(seed):
     # TRY NOT TO MODIFY: seeding
@@ -187,6 +195,7 @@ def seed_all(seed):
 def train(agent: PPOAgent):
     save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "PPO_dnn")
     writer = SummaryWriter(save_path)
+    save_config(save_path)
 
     envs = gym.vector.AsyncVectorEnv(
         [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
