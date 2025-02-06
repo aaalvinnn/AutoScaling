@@ -38,6 +38,8 @@ class DataCenterEnvironment(gym.Env):
         self.predicter = Predicter.SMAPredictor(self.ms_nums, self.config.predicter_window_size)
         # 开销
         self.C = self.config.C
+        if is_train:
+            print(f"w: {self.config.y_weight_train}")
         self.Qt = None  # 积压量
         # 动作、状态空间
         self.state = None   # to be filled in reset()
@@ -59,6 +61,8 @@ class DataCenterEnvironment(gym.Env):
         if not self.is_train:
             torch.manual_seed(seed)
             torch.backends.cudnn.deterministic = True
+
+        assert self.seed == CONFIG.seed
 
     def _reset_datastruct(self):
         """ 重置数据结构  """
@@ -576,14 +580,14 @@ class DataCenterEnvironment(gym.Env):
         # 状态转移
         self.timeslot.add_time()
         y = 0
-        # reward = 目标函数 + 异常动作惩罚 + 请求成功率奖励
+        # reward = 目标函数 + 异常动作惩罚
         if self.is_train:
-            # y = self.config.w_ns_and_delay*((np.log1p(cost*Qt))+cost) + np.mean(t_total_list)   # training use
-            y = self.config.w_ns_and_delay*cost*Qt + np.mean(t_total_list)
+            # y = self.config.y_weight*((np.log1p(cost*Qt))+cost) + np.mean(t_total_list)   # training use
+            y = self.config.y_weight_train*cost*(Qt+1) + np.mean(t_total_list)
         else:
-            y = self.config.w_ns_and_delay*cost*Qt + np.mean(t_total_list)    # test use
+            y = self.config.y_weight*cost*Qt + np.mean(t_total_list)    # test use
         # reward = -y + penalty + 50*request_success_rate
-        reward = -y + 30 + penalty
+        reward = -y
         # print(reward)
 
         # # debug
