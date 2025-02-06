@@ -1,6 +1,6 @@
 from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
 from env import environment, loghelper
-from methods import NoScaling, RandomScaling, GDCScaling, PPO_dnn, ProScaling, PPO_dnn_las
+from methods import NoScaling, RandomScaling, GDCScaling, PPO_dnn, ProScaling
 from methods import Predicter
 import random
 import numpy as np
@@ -28,6 +28,9 @@ class TestHelper(object):
                 for i, (agent, env) in enumerate(zip(self.agents, self.envs)):
                     if not dones[i]:  # Skip if this agent's environment is already done
                         action = agent.get_action(states[i])
+                        # # debug
+                        # if env.timeslot.get_now() in (180, 182, 184):
+                        #     action = (random.randint(0, 4), random.randint(0, 4), 0)
                         next_state, reward, done, _, info = env.step(action)
 
                         total_rewards[i] += reward
@@ -49,7 +52,7 @@ class TestHelper(object):
 
 
 if __name__ == '__main__':
-    env_config = config_twitter_largescale.EnvConfig()
+    env_config = environment.CONFIG
     predicter = Predicter.SMAPredictor(env_config.ms_nums, env_config.predicter_window_size)
 
     # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
@@ -72,12 +75,13 @@ if __name__ == '__main__':
     #           ppoAgent2]
     # logger = loghelper.LogHelper(["GDC", "Ideal", "DRL"])
 
-    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(4)]
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
     # agents = [GDCScaling.GDCScalingAgent(envs[0]),
     #           GDCScaling.GDCScalingAgent_Ideal(envs[1]),
     #           NoScaling.NoScalingAgent(envs[2]),
-    #           ProScaling.ProScalingAgent(envs[3])]
-    # logger = loghelper.LogHelper(["GDC", "Ideal", "NS", "Proscale"], envs)
+    #           ProScaling.ProScalingAgent(envs[3]),
+    #           RandomScaling.RandomScalingAgent(envs[4])]
+    # logger = loghelper.LogHelper(["GDC", "Ideal", "NS", "Proscale", "Random"], envs)
 
     # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
     # ppoAgent2 = PPO_dnn.PPOAgent(envs[4], env_config)
@@ -89,16 +93,17 @@ if __name__ == '__main__':
     #           ppoAgent2]
     # logger = loghelper.LogHelper(["GDC", "Ideal", "NoScaling", "ProScaling", "DRL"], envs)
 
-    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
-    ppoAgent2 = PPO_dnn.PPOAgent(env_config)
-    ppoAgent2.load("model/twitter_largescale/0118/1233/PPO_dnn")
-    agents = [NoScaling.NoScalingAgent(envs[0]),
-              RandomScaling.RandomScalingAgent(envs[1]),
-              ProScaling.ProScalingAgent(envs[2]),
-              GDCScaling.GDCScalingAgent_Ideal(envs[3]),
-              ppoAgent2,
-              ]
-    logger = loghelper.LogHelper(["NoScaling", "Random", "ProScaling", "Ideal", "DRL"], envs)
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(6)]
+    # ppoAgent2 = PPO_dnn.PPOAgent(env_config)
+    # ppoAgent2.load("model/sin_largescale/0130/0015/PPO_dnn")
+    # agents = [NoScaling.NoScalingAgent(envs[0]),
+    #           RandomScaling.RandomScalingAgent(envs[1]),
+    #           ProScaling.ProScalingAgent(envs[2]),
+    #           GDCScaling.GDCScalingAgent_Ideal(envs[3]),
+    #           GDCScaling.GDCScalingAgent(envs[4]),
+    #           ppoAgent2,
+    #           ]
+    # logger = loghelper.LogHelper(["NoScaling", "Random", "ProScaling", "Ideal", "GDC", "DRL"], envs)
 
     # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(4)]
     # ppoAgent1 = PPO_dnn.PPOAgent(envs[2], env_config)
@@ -110,6 +115,30 @@ if __name__ == '__main__':
     #           ppoAgent1,
     #           ppoAgent2]
     # logger = loghelper.LogHelper(["NoScaling", "ProScaling", "DRL", "DRL_las"], envs)
+
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(4)]
+    # ppoAgent2 = PPO_dnn.PPOAgent(env_config)
+    # ppoAgent2.load("model/sin_middlescale/0202/0758/PPO_dnn")
+    # agents = [GDCScaling.GDCScalingAgent_Ideal(envs[0]),
+    #           GDCScaling.GDCScalingAgent(envs[1]),
+    #           ProScaling.ProScalingAgent(envs[2]),
+    #           ppoAgent2,
+    #           ]
+    # logger = loghelper.LogHelper(["Ideal", "GDC", "ProScaling", "DRL"], envs)
+
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(1)]
+    # ppoAgent2 = PPO_dnn.PPOAgent(env_config)
+    # ppoAgent2.load("model/sin_smallscale/0128/2012_good/PPO_dnn")
+    # agents = [ppoAgent2]
+    # logger = loghelper.LogHelper(["DRL"], envs)
+
+    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
+    ppoAgent2 = PPO_dnn.PPOAgent(env_config)
+    ppoAgent2.load("model/twitter_smallscale/0205/2232/PPO_dnn")
+    agents = [RandomScaling.RandomScalingAgent(envs[0]),
+              ProScaling.ProScalingAgent(envs[1]),
+              ppoAgent2]
+    logger = loghelper.LogHelper(["Random", "ProScaling", "DRL"], envs)
 
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()

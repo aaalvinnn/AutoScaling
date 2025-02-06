@@ -1,11 +1,11 @@
 import numpy as np
 import random
-from configs import config_sin_smallscale, config_sin_middlescale
+from configs import config_sin_smallscale, config_sin_middlescale, config_sin_largescale
 from env.configs import config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
 
 
 # config = EnvConfig()
-CONFIG = config_twitter_largescale.EnvConfig()
+CONFIG = config_twitter_smallscale.EnvConfig()
 
 #  ------------------------------------- TimeSlot -------------------------------------  #
 class TimeSlot(object):

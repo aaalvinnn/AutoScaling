@@ -23,8 +23,7 @@ from env import environment
 from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
 
 
-# CONFIG = config.EnvConfig()
-CONFIG = config_twitter_largescale.EnvConfig()
+CONFIG = environment.CONFIG
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -38,38 +37,38 @@ class ActorCritic(nn.Module):
         self.ms_nums = ms_nums
         self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums*CONFIG.history_lamda_length, CONFIG.history_step_length]
         self.delta = max_delta*2+1
-        # params = torch.ones(3, requires_grad=True)  # 动作三个维度不同损失的权重
-        # self.params = torch.nn.Parameter(params)
 
         self.dnn = nn.Sequential(
-            layer_init(nn.Linear(np.sum(self.feature_length_list), 2048)),
-            nn.ReLU(),
-            layer_init(nn.Linear(2048, 2048)),
-            nn.ReLU(),
-            layer_init(nn.Linear(2048, 2048)),
-            nn.ReLU(),
-            layer_init(nn.Linear(2048, 2048)),
-            nn.ReLU(),
-            layer_init(nn.Linear(2048, 2048)),
-            nn.ReLU(),
-            layer_init(nn.Linear(2048, 2048)),
-            nn.ReLU(),
-            layer_init(nn.Linear(2048, 2048)),
-            nn.ReLU(),
-            # layer_init(nn.Linear(2048, 2048)),
-            # nn.ReLU(),
+            layer_init(nn.Linear(np.sum(self.feature_length_list), 512)),
+            nn.Tanh(),
+            layer_init(nn.Linear(512, 512)),
+            nn.Tanh(),
+            layer_init(nn.Linear(512, 512)),
+            nn.Tanh(),
+            layer_init(nn.Linear(512, 512)),
+            nn.Tanh(),
+            layer_init(nn.Linear(512, 512)),
+            nn.Tanh(),
+            layer_init(nn.Linear(512, 512)),
+            nn.Tanh(),
+            layer_init(nn.Linear(512, 512)),
+            nn.Tanh(),
+            # layer_init(nn.Linear(512, 512)),
+            # nn.Tanh(),
+            # layer_init(nn.Linear(512, 512)),
+            # nn.Tanh(),
         )
 
         # Actor network
         self.actors = nn.ModuleList([
-            layer_init(nn.Linear(2048, self.node_nums), std=0.01),
-            layer_init(nn.Linear(2048, self.ms_nums), std=0.01),
-            layer_init(nn.Linear(2048, self.delta), std=0.01)
+            layer_init(nn.Linear(512, self.node_nums), std=0.01),
+            layer_init(nn.Linear(512, self.ms_nums), std=0.01),
+            layer_init(nn.Linear(512, self.delta), std=0.01)
         ])
 
         # Critic for value function
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(2048, 1)),
+            layer_init(nn.Linear(512, 1)),
         )
 
     def _standardize_state(self, ob) -> torch.Tensor:
@@ -125,12 +124,6 @@ class ActorCritic(nn.Module):
             # Sample actions
             action = torch.stack([prob.sample() for prob in probs], dim=-1)  # Stack the actions for each part
 
-        # Log probabilities and Entropies
-        # logprob = 0
-        # entropy = 0
-        # for i, prob in enumerate(probs):
-        #     logprob += 0.5 / (self.params[i]**2) * prob.log_prob(action[:, i]) + torch.log(1+self.params[i]**2)
-        #     entropy += 0.5 / (self.params[i]**2) * prob.entropy() + torch.log(1+self.params[i]**2)
         logprob = sum([prob.log_prob(action[:, i]) for i, prob in enumerate(probs)])
         # print([prob.log_prob(action[:, i]) for i, prob in enumerate(probs)])
 
@@ -145,6 +138,7 @@ class PPOAgent(object):
         self.config = config
         self.actorcrtic = ActorCritic(self.config.node_nums, self.config.ms_nums, self.config.max_instance_update_num).to(CONFIG.device)
         self.optimizer = optim.Adam(self.actorcrtic.parameters(), lr=config.lr, eps=1e-5)
+        # self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=CONFIG.total_epoches, eta_min=CONFIG.lr/10)
 
     def save(self, path, name):
         save_path = os.path.join(path, name)
@@ -154,7 +148,7 @@ class PPOAgent(object):
         torch.save(self.actorcrtic.state_dict(), save_path)
 
     def load(self, path):
-        load_path = os.path.join(path, "model_dnn.pth")
+        load_path = os.path.join(path, "model_dnn_best.pth")
         self.actorcrtic.load_state_dict(torch.load(load_path, weights_only=True))
 
     def get_action(self, ob):
@@ -187,9 +181,9 @@ def save_config(save_path):
 
 def seed_all(seed):
     # TRY NOT TO MODIFY: seeding
-    random.seed(CONFIG.seed)
-    np.random.seed(CONFIG.seed)
-    torch.manual_seed(CONFIG.seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     
 def train(agent: PPOAgent):
@@ -200,6 +194,9 @@ def train(agent: PPOAgent):
     envs = gym.vector.AsyncVectorEnv(
         [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
     )
+
+    # check whether the seeds are the same
+    # TODO
 
     # Storage setup
     obs = torch.zeros((CONFIG.num_steps, CONFIG.num_envs) + envs.single_observation_space.shape).to(CONFIG.device)
@@ -327,6 +324,7 @@ def train(agent: PPOAgent):
                 end = start + CONFIG.minibatch_size
                 mb_inds = b_inds[start:end]
 
+                actions_debug = b_actions.long()[mb_inds]
                 _, newlogprob, entropy, newvalue = agent.actorcrtic.get_action_and_value(b_obs[mb_inds], b_actions.long()[mb_inds])
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
@@ -368,6 +366,7 @@ def train(agent: PPOAgent):
                 loss.backward()
                 nn.utils.clip_grad_norm_(agent.actorcrtic.parameters(), CONFIG.max_grad_norm)
                 agent.optimizer.step()
+            # agent.scheduler.step()
 
         y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
         var_y = np.var(y_true)
@@ -392,4 +391,5 @@ def train(agent: PPOAgent):
 if __name__ == "__main__":
     seed_all(CONFIG.seed)
     agent = PPOAgent(CONFIG)
+    agent.load("model/twitter_smallscale/0130/2347_best/PPO_dnn")
     train(agent)

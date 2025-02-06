@@ -1,5 +1,5 @@
 # AutoScaling
-## Attention
+## Requirements
 修改了gymnasium库：
 ```
 def reset_async(
@@ -42,3 +42,6 @@ def reset_async(
             pipe.send(("reset", env_kwargs))
         self._state = AsyncState.WAITING_RESET
 ```
+## Quick Start
+- 运行测试：`python main.py`
+- 运行训练：`python method/PPO_dnn.py`
