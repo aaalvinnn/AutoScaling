@@ -48,17 +48,17 @@ class EnvConfig:
         self.data_path = "data/loads-sin.txt"
 
         # 开销
-        self.cost_w_list = (0.2, 2, 1)
+        self.cost_w_list = (0.25, 0.1, 1)
         self.C = 15     # 服务提供商给出的时间平均长期开销预算
-        self.Q_max = 8
+        self.Q_max = 5
         self.Q_min = 0
 
         # 模型、算法配置
         self.predicter_window_size = 10
         self.history_lamda_length = min(10, self.node_nums*self.ms_nums)   # 记录的历史到达率，长度不能大于(self.node_nums*self.ms_nums)，否则无法储存于tensor中；用于模型训练的状态输入
-        self.history_step_length = min(self.node_nums, self.node_nums*self.ms_nums)
-        self.lr = 5e-6
-        self.gamma = 0.99
+        self.history_step_length = min(10, self.node_nums*self.ms_nums)
+        self.lr = 5e-5
+        self.gamma = 0.5
         self.gae_lambda = 0.95
         self.update_epochs = 10
         self.clip_coef = 0.2
@@ -69,20 +69,21 @@ class EnvConfig:
         self.norm_adv = True
 
         # 训练配置
-        self.device = "cuda:1"
+        self.device = "cuda"
         self.model_path = "model"
         self.is_las = False  # 是否展平输出而不采用多输出头
         self.num_steps = self.time_slot_end - self.time_slot_start
-        self.num_envs = 32
+        self.num_envs = 16
         self.batch_size = int(self.num_envs * self.num_steps)
         self.num_minibatches = 4
         self.minibatch_size = int(self.batch_size // self.num_minibatches)
-        self.total_epoches = 1000
+        self.total_epoches = 8000
         self.total_timesteps = self.total_epoches * self.num_steps * self.num_envs
         self.num_iterations = self.total_timesteps // self.batch_size
 
         # 奖励配置
-        self.penalty = -10
-        self.w_ns_and_delay = 0.1
+        self.penalty = -1
+        self.y_weight = 0.2
+        self.y_weight_train = 0.2
 
 

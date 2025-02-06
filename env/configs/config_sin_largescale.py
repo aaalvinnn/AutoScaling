@@ -5,7 +5,7 @@ class EnvConfig:
 
     def __init__(self):
         # id
-        self.config_name = "twitter_largescale"
+        self.config_name = "sin_largescale"
         # 随机数种子
         self.seed = 1037
 
@@ -30,7 +30,7 @@ class EnvConfig:
         self.ms_max_cpu_resource = 2
         self.ms_min_memory_resource = 10
         self.ms_max_memory_resource = 15
-        self.ms_min_lamda = -1  # 波动范围
+        self.ms_min_lamda = -1 # 波动范围
         self.ms_max_lamda = 1
         self.ms_min_mu = 3
         self.ms_max_mu = 5
@@ -45,7 +45,7 @@ class EnvConfig:
         self.init_lamda = 15
         self.min_request_T = 30     # 最大请求时延约束
         self.max_request_T = 60     # 最大请求时延约束
-        self.data_path = "data/loads-twitter.txt"
+        self.data_path = "data/loads-sin.txt"
 
         # 开销
         self.cost_w_list = (0.25, 0.1, 1)
@@ -84,6 +84,7 @@ class EnvConfig:
         # 奖励配置
         self.penalty = -1
         self.y_weight = 0.2
+        # self.y_weight_train = (self.y_weight*25/self.C)     # 不同规模场景训练需要不同的权重（因为各自的开销阈值C不同），这里用中等规模场景的C做标准化
         self.y_weight_train = 0.1
 
 
