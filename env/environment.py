@@ -14,6 +14,7 @@ class DataCenterEnvironment(gym.Env):
             id: int,
             env_config,
             is_train = False,
+            agent_type = "PPO",
             ):
         """ 初始化参数 """
         super(DataCenterEnvironment, self).__init__()
@@ -22,6 +23,7 @@ class DataCenterEnvironment(gym.Env):
         self.seed = env_config.seed
         self.config = env_config
         self.is_train = is_train
+        self.agent_type = agent_type
         self.timeslot = TimeSlot(self.config.time_slot_start, self.config.time_slot_end)
         self.ms_nums = self.config.ms_nums
         self.ms_image_list = env_config.init_ms_image_list
@@ -46,12 +48,14 @@ class DataCenterEnvironment(gym.Env):
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(7, self.ms_nums, self.server_node_nums), dtype=np.float32)
         if self.config.is_las:
             self.action_space = gym.spaces.Discrete(self.server_node_nums * self.ms_nums * (self.config.max_instance_update_num * 2 + 1))
-        else:
+        elif self.agent_type == "PPO":
             self.action_space = gym.spaces.Tuple((
                 gym.spaces.Discrete(self.server_node_nums),
                 gym.spaces.Discrete(self.ms_nums),
                 gym.spaces.Discrete(self.config.max_instance_update_num * 2 + 1)
             ))
+        elif self.agent_type == "SAC":
+            self.action_space = gym.spaces.Box(low=0, high=max(self.ms_nums, self.server_node_nums), shape=(self.ms_nums, self.server_node_nums, self.config.max_instance_update_num), dtype=np.float32)
         pass
 
     def _reset_seed(self, seed):
