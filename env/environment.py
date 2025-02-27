@@ -29,6 +29,7 @@ class DataCenterEnvironment(gym.Env):
         self.ms_image_list = env_config.init_ms_image_list
         self.server_node_nums = self.config.node_nums
         self.request_flow_nums = self.config.request_flow_nums
+        self.max_instance_update_num = self.config.max_instance_update_num
         # 初始化微服务、节点、节点带宽图、微服务依赖数据图、用户请求
         self.MS_list = []
         self.Node_list = []
@@ -47,15 +48,15 @@ class DataCenterEnvironment(gym.Env):
         self.state = None   # to be filled in reset()
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(7, self.ms_nums, self.server_node_nums), dtype=np.float32)
         if self.config.is_las:
-            self.action_space = gym.spaces.Discrete(self.server_node_nums * self.ms_nums * (self.config.max_instance_update_num * 2 + 1))
+            self.action_space = gym.spaces.Discrete(self.server_node_nums * self.ms_nums * (self.max_instance_update_num * 2 + 1))
         elif self.agent_type == "PPO":
             self.action_space = gym.spaces.Tuple((
                 gym.spaces.Discrete(self.server_node_nums),
                 gym.spaces.Discrete(self.ms_nums),
-                gym.spaces.Discrete(self.config.max_instance_update_num * 2 + 1)
+                gym.spaces.Discrete(self.max_instance_update_num * 2 + 1)
             ))
         elif self.agent_type == "SAC":
-            self.action_space = gym.spaces.Box(low=0, high=max(self.ms_nums, self.server_node_nums), shape=(self.ms_nums, self.server_node_nums, self.config.max_instance_update_num), dtype=np.float32)
+            self.action_space = gym.spaces.Box(low=0, high=(self.ms_nums*self.server_node_nums*self.max_instance_update_num-1), shape=(1, ), dtype=np.float32)
         pass
 
     def _reset_seed(self, seed):
@@ -119,7 +120,7 @@ class DataCenterEnvironment(gym.Env):
     
     def get_observation(self):
         """ 返回状态副本的元组 """
-        res = np.zeros(self.observation_space.shape)
+        res = np.zeros((7, self.ms_nums, self.server_node_nums))
         res[0] = self.state["deploy_info"]
         res[1] = self.state["cpus"]
         res[2] = self.state["memories"]
@@ -182,10 +183,13 @@ class DataCenterEnvironment(gym.Env):
         total_update_instance_nums = 0
         penalty = 0
 
+        if action.dtype == np.float32:
+            action = int(np.round(action).item())
+
         # 若输入动作为一个整数：（node_id * ms_id * delta）
-        if isinstance(action, np.int64):
-            max_delta_size = self.config.max_instance_update_num*2+1
-            delta = action % max_delta_size - self.config.max_instance_update_num
+        if isinstance(action, int):
+            max_delta_size = self.max_instance_update_num*2+1
+            delta = action % max_delta_size - self.max_instance_update_num
             ms_idx = (action // max_delta_size) % self.ms_nums
             node_idx = (action // (max_delta_size * self.ms_nums)) % self.server_node_nums
             ms = self.MS_list[ms_idx]  # 微服务
@@ -215,7 +219,7 @@ class DataCenterEnvironment(gym.Env):
         # 若输入动作为一个长度为3的向量：(node_id, ms_id, delta)
         elif len(action) == 3:
             node_idx, ms_idx, delta = action
-            delta = delta - self.config.max_instance_update_num     # 将delta从0-5映射到-2-2
+            delta = delta - self.max_instance_update_num     # 将delta从0-5映射到-2-2
             ms = self.MS_list[ms_idx]  # 微服务
             node = self.Node_list[node_idx]  # 服务器节点
 

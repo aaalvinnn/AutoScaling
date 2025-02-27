@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import tyro
-from stable_baselines3.common.buffers import ReplayBuffer
+import collections
 from torch.utils.tensorboard import SummaryWriter
 
 import os, sys 
@@ -31,8 +31,6 @@ CONFIG = environment.CONFIG
 class Args:
     exp_name: str = os.path.basename(__file__)[: -len(".py")]
     """the name of this experiment"""
-    seed: int = 1
-    """seed of the experiment"""
     torch_deterministic: bool = True
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
@@ -41,8 +39,7 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "Hopper-v4"
-    """the environment id of the task"""
+    replay_buffer_size: int = 5e4
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
     num_envs: int = 1
@@ -55,7 +52,7 @@ class Args:
     """target smoothing coefficient (default: 0.005)"""
     batch_size: int = 256
     """the batch size of sample from the reply memory"""
-    learning_starts: int = 5e3
+    learning_starts: int = 5e2
     """timestep to start learning"""
     policy_lr: float = 3e-4
     """the learning rate of the policy network optimizer"""
@@ -70,7 +67,21 @@ class Args:
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
 
+class ReplayBuffer:
+    def __init__(self, capacity):
+        self.buffer = collections.deque(maxlen=capacity) 
 
+    def add(self, state, action, reward, next_state, done): 
+        self.buffer.append((state, action, reward, next_state, done)) 
+
+    def sample(self, batch_size): 
+        transitions = random.sample(self.buffer, batch_size)
+        state, action, reward, next_state, done = zip(*transitions)
+        return np.array(state), action, reward, np.array(next_state), done 
+
+    def size(self): 
+        return len(self.buffer)
+    
 def make_env(env_id, config):
     def thunk():
         env = environment.DataCenterEnvironment(env_id, config, True, "SAC")
@@ -94,14 +105,47 @@ def save_config(save_path):
 class SoftQNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
+        self.node_nums = CONFIG.node_nums
+        self.ms_nums = CONFIG.ms_nums
+        self.delta = CONFIG.max_instance_update_num*2+1
+        self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums*CONFIG.history_lamda_length, CONFIG.history_step_length]
+        
         self.fc1 = nn.Linear(
-            np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape),
+            np.array(np.sum(self.feature_length_list) + np.prod(env.single_action_space.shape)),
             256,
         )
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
 
-    def forward(self, x, a):
+    def _standardize_state(self, ob) -> torch.Tensor:
+        """ 标准化状态，支持批次形状，同时展平给DNN输入 """
+        batch_size = ob.shape[0]
+        total_features = np.sum(self.feature_length_list)
+        fl = self.feature_length_list
+        res = torch.zeros((batch_size, total_features), dtype=torch.float32, device=CONFIG.device)
+
+        res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / min(
+            CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
+            CONFIG.node_min_memory_resource / CONFIG.ms_min_memory_resource
+        )
+        res[:, fl[0]:fl[0]+fl[1]] = ob[:, 1, 0] / CONFIG.node_max_cpu_resource
+        res[:, fl[0]+fl[1]:fl[0]+fl[1]+fl[2]] = ob[:, 2, 0] / CONFIG.node_max_memory_resource
+        # res[:, fl[0]+fl[1]+fl[2]:fl[0]+fl[1]+fl[2]+fl[3]] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
+        for i in range(CONFIG.history_lamda_length):
+            l = fl[0]+fl[1]+fl[2] + self.ms_nums*i
+            r = fl[0]+fl[1]+fl[2] + self.ms_nums*(i+1)
+            if i < self.node_nums:
+                res[:, l:r] = ob[:, 4, :, i] / CONFIG.estimated_max_lamda
+            else:
+                res[:, l:r] = ob[:, 5, :, i-self.node_nums] / CONFIG.estimated_max_lamda
+        
+        for i in range(CONFIG.history_step_length):
+                res[:, fl[0]+fl[1]+fl[2]+fl[3]+i] = ob[:, 6, i//self.node_nums, i%self.ms_nums]
+        
+        return res
+    
+    def forward(self, ob, a):
+        x = self._standardize_state(ob) # 标准化从环境观测到的状态
         x = torch.cat([x, a], 1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -116,7 +160,12 @@ LOG_STD_MIN = -5
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
+        self.node_nums = CONFIG.node_nums
+        self.ms_nums = CONFIG.ms_nums
+        self.delta = CONFIG.max_instance_update_num*2+1
+        self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums*CONFIG.history_lamda_length, CONFIG.history_step_length]
+        
+        self.fc1 = nn.Linear(np.sum(self.feature_length_list), 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc_mean = nn.Linear(256, np.prod(env.single_action_space.shape))
         self.fc_logstd = nn.Linear(256, np.prod(env.single_action_space.shape))
@@ -136,7 +185,35 @@ class Actor(nn.Module):
             ),
         )
 
-    def forward(self, x):
+    def _standardize_state(self, ob) -> torch.Tensor:
+        """ 标准化状态，支持批次形状，同时展平给DNN输入 """
+        batch_size = ob.shape[0]
+        total_features = np.sum(self.feature_length_list)
+        fl = self.feature_length_list
+        res = torch.zeros((batch_size, total_features), dtype=torch.float32, device=CONFIG.device)
+
+        res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / min(
+            CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
+            CONFIG.node_min_memory_resource / CONFIG.ms_min_memory_resource
+        )
+        res[:, fl[0]:fl[0]+fl[1]] = ob[:, 1, 0] / CONFIG.node_max_cpu_resource
+        res[:, fl[0]+fl[1]:fl[0]+fl[1]+fl[2]] = ob[:, 2, 0] / CONFIG.node_max_memory_resource
+        # res[:, fl[0]+fl[1]+fl[2]:fl[0]+fl[1]+fl[2]+fl[3]] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
+        for i in range(CONFIG.history_lamda_length):
+            l = fl[0]+fl[1]+fl[2] + self.ms_nums*i
+            r = fl[0]+fl[1]+fl[2] + self.ms_nums*(i+1)
+            if i < self.node_nums:
+                res[:, l:r] = ob[:, 4, :, i] / CONFIG.estimated_max_lamda
+            else:
+                res[:, l:r] = ob[:, 5, :, i-self.node_nums] / CONFIG.estimated_max_lamda
+        
+        for i in range(CONFIG.history_step_length):
+                res[:, fl[0]+fl[1]+fl[2]+fl[3]+i] = ob[:, 6, i//self.node_nums, i%self.ms_nums]
+        
+        return res
+    
+    def forward(self, ob):
+        x = self._standardize_state(ob) # 标准化从环境观测到的状态
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         mean = self.fc_mean(x)
@@ -168,19 +245,9 @@ def seed_all(seed):
     torch.backends.cudnn.deterministic = True
 
 def train():
-    import stable_baselines3 as sb3
-
-    if sb3.__version__ < "2.0":
-        raise ValueError(
-            """Ongoing migration: run the following command to install the new dependencies:
-poetry run pip install "stable_baselines3==2.0.0a1"
-"""
-        )
-
     args = tyro.cli(Args)
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
 
-    save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "PPO_dnn")
+    save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "SAC")
     writer = SummaryWriter(save_path)
     save_config(save_path)
 
@@ -212,18 +279,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         alpha = args.alpha
 
     envs.single_observation_space.dtype = np.float32
-    rb = ReplayBuffer(
-        args.buffer_size,
-        envs.single_observation_space,
-        envs.single_action_space,
-        device,
-        n_envs=args.num_envs,
-        handle_timeout_termination=False,
-    )
+    rb = ReplayBuffer(int(args.replay_buffer_size))
     start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
-    obs, _ = envs.reset(seed=args.seed)
+    obs, _ = envs.reset(seed=CONFIG.seed)
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
@@ -249,23 +309,24 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         for idx, trunc in enumerate(truncations):
             if trunc:
                 real_next_obs[idx] = infos["final_observation"][idx]
-        rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
+        rb.add(obs, actions, rewards, real_next_obs, terminations)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
 
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
-            data = rb.sample(args.batch_size)
+            data = {"observations": None, "actions": None, "rewards": None, "next_observations": None, "dones": None}
+            data["observations"], data["actions"], data["rewards"], data["next_observations"], data["dones"] = rb.sample(args.batch_size)
             with torch.no_grad():
-                next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
-                qf1_next_target = qf1_target(data.next_observations, next_state_actions)
-                qf2_next_target = qf2_target(data.next_observations, next_state_actions)
+                next_state_actions, next_state_log_pi, _ = actor.get_action(torch.Tensor(data["next_observations"]).to(device))
+                qf1_next_target = qf1_target(torch.Tensor(data["next_observations"]).to(device), next_state_actions)
+                qf2_next_target = qf2_target(torch.Tensor(data["next_observations"]).to(device), next_state_actions)
                 min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
-                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (min_qf_next_target).view(-1)
+                next_q_value = torch.Tensor(data["rewards"]).to(device).flatten() + (1 - torch.Tensor(data["dones"]).to(device).flatten()) * args.gamma * (min_qf_next_target).view(-1)
 
-            qf1_a_values = qf1(data.observations, data.actions).view(-1)
-            qf2_a_values = qf2(data.observations, data.actions).view(-1)
+            qf1_a_values = qf1(torch.Tensor(data["observations"]).to(device), torch.Tensor(data["actions"]).to(device)).view(-1)
+            qf2_a_values = qf2(torch.Tensor(data["observations"]).to(device), torch.Tensor(data["actions"]).to(device)).view(-1)
             qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
             qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
             qf_loss = qf1_loss + qf2_loss
@@ -279,9 +340,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 for _ in range(
                     args.policy_frequency
                 ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
-                    pi, log_pi, _ = actor.get_action(data.observations)
-                    qf1_pi = qf1(data.observations, pi)
-                    qf2_pi = qf2(data.observations, pi)
+                    pi, log_pi, _ = actor.get_action(torch.Tensor(data["observations"]).to(device))
+                    qf1_pi = qf1(torch.Tensor(data["observations"]).to(device), pi)
+                    qf2_pi = qf2(torch.Tensor(data["observations"]).to(device), pi)
                     min_qf_pi = torch.min(qf1_pi, qf2_pi)
                     actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
 
@@ -291,7 +352,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
                     if args.autotune:
                         with torch.no_grad():
-                            _, log_pi, _ = actor.get_action(data.observations)
+                            _, log_pi, _ = actor.get_action(torch.Tensor(data["observations"]).to(device))
                         alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
 
                         a_optimizer.zero_grad()
