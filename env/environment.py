@@ -56,7 +56,7 @@ class DataCenterEnvironment(gym.Env):
                 gym.spaces.Discrete(self.max_instance_update_num * 2 + 1)
             ))
         elif self.agent_type == "SAC":
-            self.action_space = gym.spaces.Box(low=0, high=(self.ms_nums*self.server_node_nums*self.max_instance_update_num-1), shape=(1, ), dtype=np.float32)
+            self.action_space = gym.spaces.Box(low=0, high=(self.ms_nums*self.server_node_nums*(2*self.max_instance_update_num+1)-1), shape=(1, ), dtype=np.float32)
         pass
 
     def _reset_seed(self, seed):
@@ -194,6 +194,9 @@ class DataCenterEnvironment(gym.Env):
             node_idx = (action // (max_delta_size * self.ms_nums)) % self.server_node_nums
             ms = self.MS_list[ms_idx]  # 微服务
             node = self.Node_list[node_idx]  # 服务器节点
+            
+            if delta > 0:
+                pass
 
             for _ in range(abs(delta)):
                 if node.is_resource_enough(ms, np.sign(delta)):
@@ -595,7 +598,12 @@ class DataCenterEnvironment(gym.Env):
         else:
             y = self.config.y_weight*cost*Qt + np.mean(t_total_list)    # test use
         # reward = -y + penalty + 50*request_success_rate
-        reward = -y
+        if self.agent_type == "PPO":
+            reward = -y
+        elif self.agent_type == "SAC":
+            # reward = -self.config.y_weight_train*cost + request_success_rate*20
+            reward = request_success_rate*10
+            # reward = -y
         # print(reward)
 
         # # debug
