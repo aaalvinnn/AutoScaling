@@ -25,28 +25,28 @@ from env.configs import config_sin_smallscale, config_sin_middlescale, config_tw
 
 
 CONFIG = environment.CONFIG
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @dataclass
 class Args:
     # Algorithm specific arguments
-    total_timesteps: int = CONFIG.num_steps * 1000
+    total_timesteps: int = CONFIG.num_steps * 5000
     """total timesteps of the experiments"""
-    num_envs: int = 16
+    num_envs: int = 1
     """the number of parallel game environments"""
     buffer_size: int = int(5e5)
     """the replay memory buffer size"""
-    gamma: float = 0.93
+    gamma: float = 0.5
     """the discount factor gamma"""
     tau: float = 0.01
     """target smoothing coefficient (default: 0.005)"""
-    batch_size: int = 256
+    batch_size: int = 128
     """the batch size of sample from the reply memory"""
-    learning_starts: int = 5e4
+    learning_starts: int = CONFIG.num_steps * 500
     """timestep to start learning"""
-    policy_lr: float = 5e-4
+    policy_lr: float = 5e-5
     """the learning rate of the policy network optimizer"""
-    q_lr: float = 5e-3
+    q_lr: float = 5e-4
     """the learning rate of the Q network network optimizer"""
     policy_frequency: int = 8
     """the frequency of training policy (delayed)"""
@@ -103,19 +103,20 @@ class SoftQNetwork(nn.Module):
         self.node_nums = CONFIG.node_nums
         self.ms_nums = CONFIG.ms_nums
         self.delta = CONFIG.max_instance_update_num*2+1
+        self.action_space = [self.node_nums, self.ms_nums, self.delta]
         self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums*CONFIG.history_lamda_length, CONFIG.history_step_length]
 
         # action rescaling, to standardize the action space here.
         self.register_buffer(
             "action_scale",
             torch.tensor(
-                (env.single_action_space.high - env.single_action_space.low),
+                torch.tensor([self.node_nums, self.ms_nums, self.delta]),
                 dtype=torch.float32,
             ),
         )
 
         self.dnn = nn.Sequential(
-            layer_init(nn.Linear(np.sum(self.feature_length_list) + np.prod(env.single_action_space.shape), 512)),
+            layer_init(nn.Linear(np.sum(self.feature_length_list) + len(self.action_space), 512)),
             nn.ReLU(),
             layer_init(nn.Linear(512, 512)),
             nn.ReLU(),
@@ -139,7 +140,7 @@ class SoftQNetwork(nn.Module):
         batch_size = ob.shape[0]
         total_features = np.sum(self.feature_length_list)
         fl = self.feature_length_list
-        res = torch.zeros((batch_size, total_features), dtype=torch.float32, device=CONFIG.device)
+        res = torch.zeros((batch_size, total_features), dtype=torch.float32, device=device)
 
         res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / min(
             CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
@@ -163,7 +164,7 @@ class SoftQNetwork(nn.Module):
     
     def _standardize_action(self, a) -> torch.Tensor:
         """ 标准化动作，支持批次形状 """
-        return a / self.action_scale
+        return a / self.action_scale    # 逐元素点除
 
     def forward(self, ob, a):
         x = self._standardize_state(ob) # 标准化从环境观测到的状态
@@ -184,8 +185,10 @@ class Actor(nn.Module):
         self.node_nums = CONFIG.node_nums
         self.ms_nums = CONFIG.ms_nums
         self.delta = CONFIG.max_instance_update_num*2+1
+        self.action_space = [self.node_nums, self.ms_nums, self.delta]
         self.feature_length_list = [self.node_nums*self.ms_nums, self.node_nums, self.node_nums, self.ms_nums*CONFIG.history_lamda_length, CONFIG.history_step_length]
         
+        # 特征提取层
         self.dnn = nn.Sequential(
             layer_init(nn.Linear(np.sum(self.feature_length_list), 512)),
             nn.ReLU(),
@@ -202,20 +205,23 @@ class Actor(nn.Module):
             layer_init(nn.Linear(512, 512)),
             nn.ReLU(),
         )
-        self.fc_mean = nn.Linear(512, np.prod(env.single_action_space.shape))
-        self.fc_logstd = nn.Linear(512, np.prod(env.single_action_space.shape))
+
+        # 输出层
+        self.fc_mean = layer_init(nn.Linear(512, len(self.action_space)), std=0.01)
+        self.fc_logstd = layer_init(nn.Linear(512, len(self.action_space)), std=0.01)
+
         # action rescaling
         self.register_buffer(
             "action_scale",
             torch.tensor(
-                (env.single_action_space.high - env.single_action_space.low) / 2.0,
+                torch.tensor([self.node_nums, self.ms_nums, self.delta]) / 2.0,
                 dtype=torch.float32,
             ),
         )
         self.register_buffer(
             "action_bias",
             torch.tensor(
-                (env.single_action_space.high + env.single_action_space.low) / 2.0,
+                torch.tensor([self.node_nums, self.ms_nums, self.delta]) / 2.0,
                 dtype=torch.float32,
             ),
         )
@@ -225,7 +231,7 @@ class Actor(nn.Module):
         batch_size = ob.shape[0]
         total_features = np.sum(self.feature_length_list)
         fl = self.feature_length_list
-        res = torch.zeros((batch_size, total_features), dtype=torch.float32, device=CONFIG.device)
+        res = torch.zeros((batch_size, total_features), dtype=torch.float32, device=device)
 
         res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / min(
             CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
@@ -292,12 +298,11 @@ def train():
     writer = SummaryWriter(save_path)
     save_config(save_path)
 
-    device = torch.device("cuda" if torch.cuda.is_available() and CONFIG.device else "cpu")
-
     # env setup
     envs = gym.vector.AsyncVectorEnv(
         [make_env(i, CONFIG) for i in range(args.num_envs)],
     )
+    # envs = make_env(0, CONFIG)()
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     actor = Actor(envs).to(device)
@@ -341,7 +346,7 @@ def train():
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
-            actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+            actions = np.array([[random.uniform(0, CONFIG.node_nums), random.uniform(0, CONFIG.ms_nums), random.uniform(0, CONFIG.max_instance_update_num)] for _ in range(envs.num_envs)])
         else:
             actions, _, _ = actor.get_action(torch.Tensor(obs).to(device))
             actions = actions.detach().cpu().numpy()
@@ -420,59 +425,7 @@ def train():
                 for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
             
-            # logging
-            if infos != {}:
-                total_reward.append(np.mean(rewards))
-                total_y.append(np.mean(infos['y']))
-                total_Qt.append(np.mean(infos['Qt']))
-                total_delay["t_all"].append(np.mean(infos['t_all']))
-                total_delay["t_exe"].append(np.mean(infos['t_exe']))
-                total_delay["t_route"].append(np.mean(infos['t_route']))
-                total_vload.append(np.mean(infos['vload']))
-                total_ns.append(np.mean(infos['ns']))
-                total_cost.append(np.mean(infos['cost']))
-                total_s_cost.append(np.mean(infos['static_cost']))
-                total_d_cost.append(np.mean(infos['dynamic_cost']))
-                total_node_using_num.append(np.mean(infos['node_using_num']))
-                total_image_nums.append(np.mean(infos['image_nums']))
-                total_rsr.append(np.mean(infos['request_success_rate']))
-                total_penalty.append(np.mean(infos['penalty']))
-
             if global_step % CONFIG.num_steps == 0:
-                iteration = global_step // CONFIG.num_steps
-                actor.save(save_path, "model.pth")
-
-                # result data
-                print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
-                writer.add_scalar("charts/reward", np.sum(total_reward), iteration)
-                writer.add_scalar("charts/y", np.mean(total_y), iteration)
-                writer.add_scalar("charts/Qt", np.mean(total_Qt), iteration)
-                writer.add_scalar("charts/t_all", np.mean(total_delay["t_all"]), iteration)
-                writer.add_scalar("charts/t_exe", np.mean(total_delay["t_exe"]), iteration)
-                writer.add_scalar("charts/t_route", np.mean(total_delay["t_route"]), iteration)
-                writer.add_scalar("charts/vload", np.mean(total_vload), iteration)
-                writer.add_scalar("charts/ns", np.sum(total_ns), iteration)
-                writer.add_scalar("charts/cost", np.mean(total_cost), iteration)
-                writer.add_scalar("charts/s_cost", np.mean(total_s_cost), iteration)
-                writer.add_scalar("charts/d_cost", np.mean(total_d_cost), iteration)
-                writer.add_scalar("charts/node_using_num", np.mean(total_node_using_num), iteration)
-                writer.add_scalar("charts/image_nums", np.mean(total_image_nums), iteration)
-                writer.add_scalar("charts/rsr", np.mean(total_rsr), iteration)
-                writer.add_scalar("charts/penalty", np.sum(total_penalty), iteration)
-                # reset data
-                total_reward.clear()
-                total_y.clear()
-                total_Qt.clear()
-                total_delay["t_all"].clear(), total_delay["t_exe"].clear(), total_delay["t_route"].clear()
-                total_vload.clear()
-                total_ns.clear()
-                total_cost.clear()
-                total_s_cost.clear()
-                total_d_cost.clear()
-                total_node_using_num.clear()
-                total_image_nums.clear()
-                total_rsr.clear()
-                total_penalty.clear()
                 # running data
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
                 writer.add_scalar("losses/qf2_values", qf2_a_values.mean().item(), global_step)
@@ -489,6 +442,60 @@ def train():
                 )
                 if args.autotune:
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
+
+        # logging
+        if infos != {}:
+            total_reward.append(np.mean(rewards))
+            total_y.append(np.mean(infos['y']))
+            total_Qt.append(np.mean(infos['Qt']))
+            total_delay["t_all"].append(np.mean(infos['t_all']))
+            total_delay["t_exe"].append(np.mean(infos['t_exe']))
+            total_delay["t_route"].append(np.mean(infos['t_route']))
+            total_vload.append(np.mean(infos['vload']))
+            total_ns.append(np.mean(infos['ns']))
+            total_cost.append(np.mean(infos['cost']))
+            total_s_cost.append(np.mean(infos['static_cost']))
+            total_d_cost.append(np.mean(infos['dynamic_cost']))
+            total_node_using_num.append(np.mean(infos['node_using_num']))
+            total_image_nums.append(np.mean(infos['image_nums']))
+            total_rsr.append(np.mean(infos['request_success_rate']))
+            total_penalty.append(np.mean(infos['penalty']))
+
+        if global_step % CONFIG.num_steps == 0:
+            iteration = global_step // CONFIG.num_steps
+            actor.save(save_path, "model.pth")
+
+            # result data
+            print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
+            writer.add_scalar("charts/reward", np.sum(total_reward), iteration)
+            writer.add_scalar("charts/y", np.mean(total_y), iteration)
+            writer.add_scalar("charts/Qt", np.mean(total_Qt), iteration)
+            writer.add_scalar("charts/t_all", np.mean(total_delay["t_all"]), iteration)
+            writer.add_scalar("charts/t_exe", np.mean(total_delay["t_exe"]), iteration)
+            writer.add_scalar("charts/t_route", np.mean(total_delay["t_route"]), iteration)
+            writer.add_scalar("charts/vload", np.mean(total_vload), iteration)
+            writer.add_scalar("charts/ns", np.sum(total_ns), iteration)
+            writer.add_scalar("charts/cost", np.mean(total_cost), iteration)
+            writer.add_scalar("charts/s_cost", np.mean(total_s_cost), iteration)
+            writer.add_scalar("charts/d_cost", np.mean(total_d_cost), iteration)
+            writer.add_scalar("charts/node_using_num", np.mean(total_node_using_num), iteration)
+            writer.add_scalar("charts/image_nums", np.mean(total_image_nums), iteration)
+            writer.add_scalar("charts/rsr", np.mean(total_rsr), iteration)
+            writer.add_scalar("charts/penalty", np.sum(total_penalty), iteration)
+            # reset data
+            total_reward.clear()
+            total_y.clear()
+            total_Qt.clear()
+            total_delay["t_all"].clear(), total_delay["t_exe"].clear(), total_delay["t_route"].clear()
+            total_vload.clear()
+            total_ns.clear()
+            total_cost.clear()
+            total_s_cost.clear()
+            total_d_cost.clear()
+            total_node_using_num.clear()
+            total_image_nums.clear()
+            total_rsr.clear()
+            total_penalty.clear()
 
     envs.close()
     writer.close()

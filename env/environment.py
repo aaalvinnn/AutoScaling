@@ -56,7 +56,7 @@ class DataCenterEnvironment(gym.Env):
                 gym.spaces.Discrete(self.max_instance_update_num * 2 + 1)
             ))
         elif self.agent_type == "SAC":
-            self.action_space = gym.spaces.Box(low=0, high=(self.ms_nums*self.server_node_nums*(2*self.max_instance_update_num+1)-1), shape=(1, ), dtype=np.float32)
+            self.action_space = gym.spaces.Box(low=0, high=max(self.server_node_nums, max(self.ms_nums, self.max_instance_update_num)), shape=(3, ), dtype=np.float32)
         pass
 
     def _reset_seed(self, seed):
@@ -183,7 +183,7 @@ class DataCenterEnvironment(gym.Env):
         total_update_instance_nums = 0
         penalty = 0
 
-        if action.dtype == np.float32:
+        if len(action) == 1 and action.dtype == np.float32:
             action = int(np.round(action).item())
 
         # 若输入动作为一个整数：（node_id * ms_id * delta）
@@ -221,10 +221,12 @@ class DataCenterEnvironment(gym.Env):
 
         # 若输入动作为一个长度为3的向量：(node_id, ms_id, delta)
         elif len(action) == 3:
-            node_idx, ms_idx, delta = action
+            action_space = [self.server_node_nums-1, self.ms_nums-1, self.max_instance_update_num*2+1-1]
+            node_idx, ms_idx, delta = [min(math.floor(a), a_max) for (a, a_max) in zip(action, action_space)]
             delta = delta - self.max_instance_update_num     # 将delta从0-5映射到-2-2
             ms = self.MS_list[ms_idx]  # 微服务
             node = self.Node_list[node_idx]  # 服务器节点
+            # print(f"node_idx: {node_idx}, ms_idx: {ms_idx}, delta: {delta} action: {action}")
 
             for _ in range(abs(delta)):
                 if node.is_resource_enough(ms, np.sign(delta)):
@@ -602,8 +604,8 @@ class DataCenterEnvironment(gym.Env):
             reward = -y
         elif self.agent_type == "SAC":
             # reward = -self.config.y_weight_train*cost + request_success_rate*20
-            reward = request_success_rate*10
-            # reward = -y
+            # reward = request_success_rate*10
+            reward = -y
         # print(reward)
 
         # # debug
