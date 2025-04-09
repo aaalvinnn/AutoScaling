@@ -148,7 +148,7 @@ class PPOAgent(object):
         torch.save(self.actorcrtic.state_dict(), save_path)
 
     def load(self, path):
-        load_path = os.path.join(path, "model_dnn_best.pth")
+        load_path = os.path.join(path, "model_dnn.pth")
         self.actorcrtic.load_state_dict(torch.load(load_path, weights_only=True))
 
     def get_action(self, ob):
@@ -212,6 +212,8 @@ def train(agent: PPOAgent):
     # best_reward = 0
     best_y = np.inf
 
+    record_reward = []
+    record_y = []
     for iteration in range(1, CONFIG.num_iterations + 1):
         total_reward = []
         total_y = []
@@ -290,6 +292,8 @@ def train(agent: PPOAgent):
         if best_y > np.mean(total_y):
             best_y = np.mean(total_y)
             agent.save(save_path, "model_dnn_best.pth")
+        if iteration % 5000 == 0:
+            agent.save(save_path, f"model_dnn_{iteration}.pth")
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -391,5 +395,5 @@ def train(agent: PPOAgent):
 if __name__ == "__main__":
     seed_all(CONFIG.seed)
     agent = PPOAgent(CONFIG)
-    agent.load("model/twitter_smallscale/0130/2347_best/PPO_dnn")
+    agent.load("model/twitter_largescale/0402/1043/PPO_dnn")
     train(agent)

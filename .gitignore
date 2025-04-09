@@ -3,3 +3,11 @@ __pycache__/
 /test_output
 /model
 /release
+/trained_models
+
+*.pyc
+*.pdf
+*.npy
+*.json
+*.tar
+*.log

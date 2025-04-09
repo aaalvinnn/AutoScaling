@@ -1,6 +1,6 @@
 from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
 from env import environment, loghelper
-from methods import NoScaling, RandomScaling, GDCScaling, PPO_dnn, ProScaling
+from methods import NoScaling, RandomScaling, GDCScaling, PPO_dnn, ProScaling, SAC
 from methods import Predicter
 import random
 import numpy as np
@@ -132,13 +132,27 @@ if __name__ == '__main__':
     # agents = [ppoAgent2]
     # logger = loghelper.LogHelper(["DRL"], envs)
 
-    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(4)]
+    # ppoAgent1 = SAC.SACAgent(env_config)
+    # ppoAgent1.load("model/twitter_largescale/0316/2234/SAC")
+    # ppoAgent2 = PPO_dnn.PPOAgent(env_config)
+    # ppoAgent2.load("model/twitter_largescale/0327/2342/PPO_dnn")
+    # agents = [RandomScaling.RandomScalingAgent(envs[0]),
+    #           ProScaling.ProScalingAgent(envs[1]),
+    #           ppoAgent2,
+    #           ppoAgent1]
+    # logger = loghelper.LogHelper(["Random", "ProScaling", "DRL", "SAC"], envs)
+
+    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(4)]
+    ppoAgent1 = SAC.SACAgent(env_config)
+    ppoAgent1.load("model/sin_largescale/0315/1132/SAC")
     ppoAgent2 = PPO_dnn.PPOAgent(env_config)
-    ppoAgent2.load("model/twitter_smallscale/0205/2232/PPO_dnn")
-    agents = [RandomScaling.RandomScalingAgent(envs[0]),
+    ppoAgent2.load("model/sin_largescale/0205/1249/PPO_dnn")
+    agents = [GDCScaling.HPA(envs[0]),
               ProScaling.ProScalingAgent(envs[1]),
+              ppoAgent1,
               ppoAgent2]
-    logger = loghelper.LogHelper(["Random", "ProScaling", "DRL"], envs)
+    logger = loghelper.LogHelper(["HPA", "ProScaling", "RL Agent", "LGDRL"], envs)
 
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()
