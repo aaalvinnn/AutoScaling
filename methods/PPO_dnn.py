@@ -53,10 +53,6 @@ class ActorCritic(nn.Module):
             nn.Tanh(),
             layer_init(nn.Linear(512, 512)),
             nn.Tanh(),
-            # layer_init(nn.Linear(512, 512)),
-            # nn.Tanh(),
-            # layer_init(nn.Linear(512, 512)),
-            # nn.Tanh(),
         )
 
         # Actor network
@@ -133,9 +129,11 @@ class ActorCritic(nn.Module):
         return action, logprob, entropy, self.critic(features)
 
 class PPOAgent(object):
-    def __init__(self, config: config_sin_smallscale.EnvConfig):
+    def __init__(self, config: config_sin_smallscale.EnvConfig, delta=None):
         # Basic config
         self.config = config
+        if delta is not None:
+            self.config.max_instance_update_num = delta
         self.actorcrtic = ActorCritic(self.config.node_nums, self.config.ms_nums, self.config.max_instance_update_num).to(CONFIG.device)
         self.optimizer = optim.Adam(self.actorcrtic.parameters(), lr=config.lr, eps=1e-5)
         # self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=CONFIG.total_epoches, eta_min=CONFIG.lr/10)
@@ -148,8 +146,8 @@ class PPOAgent(object):
         torch.save(self.actorcrtic.state_dict(), save_path)
 
     def load(self, path):
-        load_path = os.path.join(path, "model_dnn_best.pth")
-        self.actorcrtic.load_state_dict(torch.load(load_path, weights_only=True))
+        load_path = os.path.join(path, "model_dnn.pth")
+        self.actorcrtic.load_state_dict(torch.load(load_path, weights_only=True, map_location=torch.device('cpu')))
 
     def get_action(self, ob):
         """
