@@ -180,7 +180,7 @@ LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env=None):
         super().__init__()
         self.node_nums = CONFIG.node_nums
         self.ms_nums = CONFIG.ms_nums
@@ -228,6 +228,13 @@ class Actor(nn.Module):
 
     def _standardize_state(self, ob) -> torch.Tensor:
         """ 标准化状态，支持批次形状，同时展平给DNN输入 """
+        # 转换为tensor
+        if not isinstance(ob, torch.Tensor):
+            ob = torch.tensor(ob)
+        # 测试时没有batch_size维度
+        if len(ob.shape) <= 3:
+            ob = ob.unsqueeze(0)
+
         batch_size = ob.shape[0]
         total_features = np.sum(self.feature_length_list)
         fl = self.feature_length_list
@@ -283,6 +290,33 @@ class Actor(nn.Module):
             os.makedirs(os.path.dirname(save_path))
         
         torch.save(self.state_dict(), save_path)
+
+class SACAgent(object):
+    def __init__(self, config: config_sin_smallscale.EnvConfig):
+        # Basic config
+        self.config = config
+        self.actor = Actor(config).to(CONFIG.device)
+
+    def save(self, path, name):
+        save_path = os.path.join(path, name)
+        if not os.path.exists(os.path.dirname(save_path)):
+            os.makedirs(os.path.dirname(save_path))
+        
+        torch.save(self.actor.state_dict(), save_path)
+
+    def load(self, path):
+        load_path = os.path.join(path, "model.pth")
+        self.actor.load_state_dict(torch.load(load_path, weights_only=True, map_location=torch.device('cpu')))
+
+    def get_action(self, ob):
+        """
+        predict, 供test对比实验调用，不在训练中被调用
+        """
+        # self.actorcrtic.eval()
+        ob = torch.Tensor(ob).unsqueeze(0)
+        action, _, _ = self.actor.get_action(ob)
+        action = action.cpu().detach().numpy()[0]
+        return action
 
 def seed_all(seed):
     # TRY NOT TO MODIFY: seeding
