@@ -44,7 +44,7 @@ class ProScalingAgent(object):
 
         return d_star, tau_min
     
-    def get_action(self, state):
+    def get_action_single(self, state):
         """
         一次只动一个微服务
         根据预测的到达率判断哪些微服务需要弹性伸缩
@@ -69,3 +69,32 @@ class ProScalingAgent(object):
                         action = (node.id, ms.id, delta)
 
         return action
+    
+    def get_action(self, state):
+        """
+        原论文的实现版本
+        """
+        action = np.zeros((self.env.ms_nums, self.env.server_node_nums), dtype=int)
+
+        predict_lamda_list = state[3,:,0]
+        pre_deploy_info = state[0]
+        self.Um = copy.deepcopy(self.env.Node_list)
+
+        tau_all_list = []
+
+        for ms in self.env.MS_list:  # 遍历所有微服务
+            image_num = np.sum(pre_deploy_info[ms.id])
+            lamda = predict_lamda_list[ms.id] - image_num * ms.mu
+            while lamda > -10:
+                node, tau = self.greedy_device_chosen(ms, self.Um, pre_deploy_info, 1+self.actoin_space_dim[2]//2)
+                tau_all_list.append(tau)
+                action[ms.id][node.id] += 1
+                # 更新虚拟节点列表Um的资源使用情况
+                self.Um[node.id].delpoy(ms, 1)
+                pre_deploy_info[ms.id][node.id] += 1
+                # 更新到达率
+                image_num = np.sum(pre_deploy_info[ms.id])
+                lamda = predict_lamda_list[ms.id] - image_num * ms.mu
+
+        return action
+
