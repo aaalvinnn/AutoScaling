@@ -3,3 +3,7 @@ __pycache__/
 /test_output
 /model
 /release
+*.pdf
+/trained_models
+/draw_pictures
+trained_models.tar
