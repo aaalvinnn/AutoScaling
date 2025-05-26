@@ -603,9 +603,9 @@ class DataCenterEnvironment(gym.Env):
         if self.agent_type == "PPO":
             reward = -y
         elif self.agent_type == "SAC":
-            # reward = -self.config.y_weight_train*cost + request_success_rate*20
+            reward = -self.config.y_weight_train*cost + request_success_rate*20
             # reward = request_success_rate*10
-            reward = -y
+            # reward = -y
         # print(reward)
 
         # # debug

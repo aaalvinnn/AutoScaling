@@ -30,17 +30,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @dataclass
 class Args:
     # Algorithm specific arguments
-    total_timesteps: int = CONFIG.num_steps * 5000
+    total_timesteps: int = CONFIG.num_steps * 10000
     """total timesteps of the experiments"""
     num_envs: int = 1
     """the number of parallel game environments"""
-    buffer_size: int = int(5e5)
+    buffer_size: int = int(5e6)
     """the replay memory buffer size"""
-    gamma: float = 0.5
+    gamma: float = 0.93
     """the discount factor gamma"""
     tau: float = 0.01
     """target smoothing coefficient (default: 0.005)"""
-    batch_size: int = 128
+    batch_size: int = 512
     """the batch size of sample from the reply memory"""
     learning_starts: int = CONFIG.num_steps * 500
     """timestep to start learning"""
@@ -48,9 +48,9 @@ class Args:
     """the learning rate of the policy network optimizer"""
     q_lr: float = 5e-4
     """the learning rate of the Q network network optimizer"""
-    policy_frequency: int = 8
+    policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
-    target_network_frequency: int = 1  # Denis Yarats' implementation delays this by 2.
+    target_network_frequency: int = 2  # Denis Yarats' implementation delays this by 2.
     """the frequency of updates for the target nerworks"""
     alpha: float = 0.2
     """Entropy regularization coefficient."""
@@ -173,6 +173,16 @@ class SoftQNetwork(nn.Module):
         x = self.dnn(x)
         x = self.critic(x)
         return x
+    
+    def save(self, path, name):
+        save_path = os.path.join(path, name)
+        if not os.path.exists(os.path.dirname(save_path)):
+            os.makedirs(os.path.dirname(save_path))
+        
+        torch.save(self.state_dict(), save_path)
+
+    def load(self, path):
+        self.load_state_dict(torch.load(path, weights_only=True))
 
 
 LOG_STD_MAX = 2
@@ -180,6 +190,7 @@ LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
+    def __init__(self, env=None):
     def __init__(self, env=None):
         super().__init__()
         self.node_nums = CONFIG.node_nums
@@ -344,6 +355,10 @@ def train():
     qf2 = SoftQNetwork(envs).to(device)
     qf1_target = SoftQNetwork(envs).to(device)
     qf2_target = SoftQNetwork(envs).to(device)
+    # continue training
+    # actor.load("model/sin_largescale/0314/1637/SAC/model.pth")
+    # qf1.load("model/sin_largescale/0314/1637/SAC/qf1.pth")
+    # qf2.load("model/sin_largescale/0314/1637/SAC/qf2.pth")
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr)
@@ -498,6 +513,12 @@ def train():
         if global_step % CONFIG.num_steps == 0:
             iteration = global_step // CONFIG.num_steps
             actor.save(save_path, "model.pth")
+            qf1.save(save_path, "qf1.pth")
+            qf2.save(save_path, "qf2.pth")
+            if iteration % 5000 == 0:
+                actor.save(save_path, f"model_{iteration}.pth")
+                qf1.save(save_path, f"qf1_{iteration}.pth")
+                qf2.save(save_path, f"qf2_{iteration}.pth")
 
             # result data
             print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")

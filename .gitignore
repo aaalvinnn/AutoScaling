@@ -7,3 +7,11 @@ __pycache__/
 /trained_models
 /draw_pictures
 trained_models.tar
+/trained_models
+
+*.pyc
+*.pdf
+*.npy
+*.json
+*.tar
+*.log
