@@ -32,10 +32,14 @@ class LogHelper(object):
                         "request_success_rate": "",
                         "r": "",
                     }
-        self.save_path = os.path.join("test_output", self.env_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"))
+        # self.save_path = os.path.join("test_output", self.env_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M%S"))
+        self.save_path = os.path.join("test_output", self.env_name)
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
-        
+    
+    def get_data(self):
+        return self.data
+
     def record(self, infos):
         if len(infos) != len(self.agents_name):
             raise ValueError(f"The length of infos {len(infos)} is not equal to the length of agents name {self.agents_name}")
@@ -44,13 +48,25 @@ class LogHelper(object):
             for key in infos[i]:
                 self.data[agent_name][key].append(infos[i][key])
 
+    def replace_data(self, infos):
+        if len(infos) != len(self.agents_name):
+            raise ValueError(f"The length of infos {len(infos)} is not equal to the length of agents name {self.agents_name}")
+
+        self.data = infos
+
+    def clear(self):
+        for agent_name in self.agents_name:
+            for key in self.data[agent_name]:
+                self.data[agent_name][key].clear()
+
     def visualize(self):
         for metric in self.ylabel_metrics.keys():
             if metric == "t_all" or metric == "t_exe" or metric == "t_route" or metric == "request_success_rate" or metric == "y" or metric == "dynamic_cost":
                 plt.figure(figsize=(10, 6))
                 for agent_name in self.agents_name:
                     if metric in self.data[agent_name]:
-                        y = moving_average(self.data[agent_name][metric], 15)
+                        # y = moving_average(self.data[agent_name][metric], 15)
+                        y = self.data[agent_name][metric]
                         # y = self.data[agent_name][metric]
                         plt.plot(y, label=agent_name)
                 plt.title(f"Comparison of {metric}")
@@ -90,13 +106,14 @@ class LogHelper(object):
                 plt.savefig(os.path.join(self.save_path, f"{metric}_bar.png"))
                 plt.close()
     
-    def save_data(self):
+    def save_data(self, infos=None):
         for agent_name in self.agents_name:
             for metric in self.data[agent_name]:
                 data_save_path = os.path.join(self.save_path, "data", f"{agent_name}", f"{metric}.npy")
                 if not os.path.exists(os.path.dirname(data_save_path)):
                     os.makedirs(os.path.dirname(data_save_path))
                 np.save(data_save_path, self.data[agent_name][metric])
+
 
 def moving_average(data, window_size):
     """
