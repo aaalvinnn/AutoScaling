@@ -107,7 +107,7 @@ class DataCenterEnvironment(gym.Env):
         # 这里假定已知最初的到达率，以确定一个合理的实例数量
         for i in range(len(self.ms_image_list)):
             ms = self.MS_list[i]
-            self.ms_image_list[i] = math.ceil(ms.lamda / ms.mu)     # 向上取整
+            self.ms_image_list[i] = math.ceil(ms.lamda / ms.mu * 1.2)     # 向上取整
 
         init_deploy_strategy = FFD.FFD(self.MS_list, self.ms_image_list, self.Node_list, self.state)
         self.state, self.Node_list = init_deploy_strategy.deploy()
@@ -632,9 +632,9 @@ class DataCenterEnvironment(gym.Env):
         # extra info
         info = {
             "y": y,
-            "t_all": np.mean(t_total_list),
-            "t_exe": np.mean(t_exe_list),
-            "t_route": np.mean(t_route_list),
+            "t_all": np.sum(t_total_list),
+            "t_exe": np.sum(t_exe_list),
+            "t_route": np.sum(t_route_list),
             "vload": vload,
             "ns": ns,
             "cost": cost,
@@ -674,4 +674,9 @@ def read_data(path):
     with open(path, "r") as f:
         for line in f.readlines():
             data.append(float(line.strip()))
+
+    # 线性变化
+    if "sin" in path:
+        data = [(c-15)/10 * 5 + 20 for c in data]
+
     return data
