@@ -13,8 +13,8 @@ class GDCScalingAgent_Ideal(object):
         self.actoin_space_dim = np.zeros((self.env.ms_nums, self.env.server_node_nums), dtype=int)
         self.offset = self.env.config.max_instance_update_num
         self.Um = copy.deepcopy(self.env.Node_list)     # 虚拟节点列表，用于判断资源使用情况
-        self.ro_max = 0.75
-        self.ro_min = 0.5
+        self.ro_max = 0.6
+        self.ro_min = 0.4
         
     def greedy_device_chosen(self, m, Um, pre_deploy_info, delta):
         """
@@ -120,8 +120,8 @@ class GDCScalingAgent(object):
         self.actoin_space_dim = np.array([env.server_node_nums, env.ms_nums, env.config.max_instance_update_num*2+1], dtype=int)
         self.offset = self.env.config.max_instance_update_num
         self.Um = copy.deepcopy(self.env.Node_list)     # 虚拟节点列表，用于判断资源使用情况
-        self.ro_max = 0.75
-        self.ro_min = 0.5
+        self.ro_max = 0.6
+        self.ro_min = 0.4
         
     def greedy_device_chosen(self, m, Um, pre_deploy_info, delta):
         """
