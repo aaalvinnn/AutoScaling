@@ -84,21 +84,25 @@ LGDRL_MODEL_PATH = {
     "sin_smallscale": "trained_models/sin_smallscale/0202/1159/PPO_dnn",
     "sin_middlescale": "trained_models/sin_middlescale/0202/0758_best/PPO_dnn",
     # "sin_largescale": "trained_models/sin_largescale/0205/1249/PPO_dnn",
-    "sin_largescale": "model/sin_largescale/0428/1936_V=10_1/PPO_dnn",
+    # "sin_largescale": "model/sin_largescale/0428/1936_V=10_1/PPO_dnn",
+    "sin_largescale": "model/sin_largescale/0531/1359/PPO_dnn",
     "twitter_smallscale": "trained_models/twitter_smallscale/0205/2232/PPO_dnn",
     "twitter_middlescale": "trained_models/twitter_middlescale/0202/1555/PPO_dnn",
     # "twitter_largescale": "trained_models/twitter_largescale/0203/2143_best/PPO_dnn",
     # "twitter_largescale": "trained_models/twitter_largescale/0412_V0_3"
-    "twitter_largescale": "params_exp/V/N_change=3/10/1"
+    # "twitter_largescale": "params_exp/V/N_change=3/10/1",
+    "twitter_largescale": "model/twitter_largescale/0530/1829/PPO_dnn"
 }
 
 RLAGENT_MODEL_PATH = {
     "sin_smallscale": "trained_models/sin_smallscale/0314/0953_best/SAC",
     "sin_middlescale": "trained_models/sin_middlescale/0312/1307_best/SAC",
-    "sin_largescale": "trained_models/sin_largescale/0314/1637/SAC",
+    # "sin_largescale": "trained_models/sin_largescale/0314/1637/SAC",
+    "sin_largescale": "model/sin_largescale/0529/2158/SAC",
     "twitter_smallscale": "trained_models/twitter_smallscale/0312/1308_best/SAC",
     "twitter_middlescale": "trained_models/twitter_middlescale/0315/1644/SAC",
-    "twitter_largescale": "trained_models/twitter_largescale/0313/1046/SAC"
+    # "twitter_largescale": "trained_models/twitter_largescale/0313/1046/SAC"
+    "twitter_largescale": "model/twitter_largescale/0603/1507/SAC"
 }
 
 if __name__ == '__main__':
@@ -116,36 +120,54 @@ if __name__ == '__main__':
     #           ppoAgent1]
     # logger = loghelper.LogHelper(["HPA", "Proscale", "RL Agent", "LGDRL"], envs)
 
-    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
-    agents = [HPA.HPA(envs[0]),
-              ProScaling.ProScalingAgent(envs[1]),
-              GDCScaling.GDCScalingAgent_Ideal(envs[2])
-              ]
-    logger = loghelper.LogHelper(["HPA", "Proscale", "HPA_ideal"], envs)
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(1)]
+    # ppoAgent2 = SAC.SACAgent(config=env_config)
+    # ppoAgent2.load(RLAGENT_MODEL_PATH[env_config.config_name])
+    # agents = [ppoAgent2]
+    # logger = loghelper.LogHelper(["RL Agent"], envs)
 
     # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
+    # agents = [HPA.HPA(envs[0]),
+    #           ProScaling.ProScalingAgent(envs[1]),
+    #           GDCScaling.GDCScalingAgent_Ideal(envs[2])
+    #           ]
+    # logger = loghelper.LogHelper(["HPA", "Proscale", "HPA_ideal"], envs)
+
+    # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(5)]
     # ppoAgent1 = PPO_dnn.PPOAgent(config=env_config)
-    # ppoAgent1.load("params_exp/V/N_change=3/1/1")
+    # ppoAgent1.load("trained_models/params_exp/V/0604/V=1/PPO_dnn/model_dnn_5000.pth")
     # ppoAgent2 = PPO_dnn.PPOAgent(config=env_config)
-    # ppoAgent2.load("params_exp/V/N_change=3/10/1")
+    # ppoAgent2.load("trained_models/params_exp/V/0604/V=2/PPO_dnn/model_dnn.pth")
     # ppoAgent3 = PPO_dnn.PPOAgent(config=env_config)
-    # ppoAgent3.load("params_exp/V/N_change=3/100/2")
+    # ppoAgent3.load("model/twitter_largescale/0530/1829/PPO_dnn/model_dnn_best.pth")
+    # ppoAgent4 = PPO_dnn.PPOAgent(config=env_config)
+    # ppoAgent4.load("trained_models/params_exp/V/0604/V=100/PPO_dnn/model_dnn.pth")
+    # ppoAgent5 = PPO_dnn.PPOAgent(config=env_config)
+    # ppoAgent5.load("trained_models/params_exp/V/0604/V=1000/PPO_dnn/model_dnn.pth")
     # agents = [ppoAgent1,
     #           ppoAgent2,
-    #           ppoAgent3]
-    # logger = loghelper.LogHelper(["V=1", "V=10", "V=100"], envs)
+    #           ppoAgent3,
+    #           ppoAgent4,
+    #           ppoAgent5]
+    # logger = loghelper.LogHelper(["V=1", "V=2", "V=10", "V=100", "V=1000"], envs)
 
     # envs = [environment.DataCenterEnvironment(i, env_config) for i in range(3)]
     # ppoAgent1 = PPO_dnn.PPOAgent(config=env_config, delta=1)
-    # ppoAgent1.load("params_exp/delta/1/5/")
+    # ppoAgent1.load("trained_models/params_exp/delta/0610/delta=1/PPO_dnn/model_dnn.pth")
     # ppoAgent2 = PPO_dnn.PPOAgent(config=env_config, delta=2)
-    # ppoAgent2.load("params_exp/delta/2/2/")
+    # ppoAgent2.load("trained_models/params_exp/delta/0610/delta=2/PPO_dnn/model_dnn.pth")
     # ppoAgent3 = PPO_dnn.PPOAgent(config=env_config, delta=3)
-    # ppoAgent3.load("params_exp/delta/3/2/")
+    # ppoAgent3.load("model/twitter_largescale/0530/1829/PPO_dnn/model_dnn.pth")
     # agents = [ppoAgent1,
     #           ppoAgent2,
     #           ppoAgent3]
     # logger = loghelper.LogHelper(["delta=1", "delta=2", "delta=3"], envs)
+
+    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(1)]
+    ppoAgent1 = PPO_dnn.PPOAgent(config=env_config)
+    ppoAgent1.load("model/twitter_largescale/0530/1829/PPO_dnn/model_dnn.pth")
+    agents = [ppoAgent1]
+    logger = loghelper.LogHelper(["V=10"], envs)
 
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()
