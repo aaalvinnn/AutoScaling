@@ -5,7 +5,7 @@ from env.configs import config_twitter_largescale, config_twitter_middlescale, c
 
 
 # config = EnvConfig()
-CONFIG = config_sin_largescale.EnvConfig()
+CONFIG = config_twitter_largescale.EnvConfig()
 
 #  ------------------------------------- TimeSlot -------------------------------------  #
 class TimeSlot(object):

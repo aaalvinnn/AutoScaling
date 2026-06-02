@@ -43,8 +43,8 @@ class EnvConfig:
         self.max_request_chain_length = 5
         self.estimated_max_lamda = 50
         self.init_lamda = 15
-        self.min_request_T = 30     # 最大请求时延约束
-        self.max_request_T = 60     # 最大请求时延约束
+        self.min_request_T = 10     # 最大请求时延约束
+        self.max_request_T = 20     # 最大请求时延约束
         self.data_path = "data/loads-sin.txt"
 
         # 开销
@@ -58,7 +58,7 @@ class EnvConfig:
         self.history_lamda_length = min(10, self.node_nums*self.ms_nums)   # 记录的历史到达率，长度不能大于(self.node_nums*self.ms_nums)，否则无法储存于tensor中；用于模型训练的状态输入
         self.history_step_length = min(10, self.node_nums*self.ms_nums)
         self.lr = 5e-5
-        self.gamma = 0.5
+        self.gamma = 0.95
         self.gae_lambda = 0.95
         self.update_epochs = 10
         self.clip_coef = 0.2
@@ -69,7 +69,7 @@ class EnvConfig:
         self.norm_adv = True
 
         # 训练配置
-        self.device = "cuda"
+        self.device = "cpu"
         self.model_path = "model"
         self.is_las = False  # 是否展平输出而不采用多输出头
         self.num_steps = self.time_slot_end - self.time_slot_start
