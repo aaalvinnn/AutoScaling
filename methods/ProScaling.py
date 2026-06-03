@@ -35,8 +35,10 @@ class ProScalingAgent(object):
                 delpoy_info = copy.deepcopy(pre_deploy_info)
                 delpoy_info[m.id][d.id] += delta
                 # 计算路由时延、处理和排队时延等总时延
-                # TODO 这里相当于运行了一次仿真，是不对的
-                tau = np.mean(self.env.cal_total_access_delay(delpoy_info)[0])
+                try:
+                    tau = np.mean(self.env.cal_total_access_delay(delpoy_info)[0])
+                except (TypeError, ValueError, ZeroDivisionError):
+                    continue
 
                 if tau < tau_min:
                     tau_min = tau
@@ -63,6 +65,8 @@ class ProScalingAgent(object):
             if lamda > 0:
                 for delta in range(self.actoin_space_dim[2]//2+1, self.actoin_space_dim[2]):
                     node, tau_min = self.greedy_device_chosen(ms, self.Um, pre_deploy_info, delta)
+                    if node is None:
+                        continue
                     tau_all_list.append(tau_min)
                     if tau_min < tau:
                         tau = tau_min
@@ -87,6 +91,8 @@ class ProScalingAgent(object):
             lamda = predict_lamda_list[ms.id] - image_num * ms.mu
             while lamda > -10:
                 node, tau = self.greedy_device_chosen(ms, self.Um, pre_deploy_info, 1+self.actoin_space_dim[2]//2)
+                if node is None:
+                    break
                 tau_all_list.append(tau)
                 action[ms.id][node.id] += 1
                 # 更新虚拟节点列表Um的资源使用情况

@@ -36,8 +36,10 @@ class HPA(object):
                 delpoy_info = copy.deepcopy(pre_deploy_info)
                 delpoy_info[m.id][d.id] += delta
                 # 计算路由时延、处理和排队时延等总时延
-                # TODO 这里相当于运行了一次仿真，是不对的
-                tau = np.mean(self.env.cal_total_access_delay(delpoy_info)[0])
+                try:
+                    tau = np.mean(self.env.cal_total_access_delay(delpoy_info)[0])
+                except (TypeError, ValueError, ZeroDivisionError):
+                    continue
 
                 if tau < tau_min:
                     tau_min = tau
