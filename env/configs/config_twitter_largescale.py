@@ -85,5 +85,4 @@ class EnvConfig:
         self.penalty = -1
         self.y_weight = 0.2
         self.y_weight_train = 0.1
-
-
+        self.reward_shaping_record_epoch = 100
