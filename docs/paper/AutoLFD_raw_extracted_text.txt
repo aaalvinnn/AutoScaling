@@ -1,0 +1,1783 @@
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+1
+
+AutoLFD: A Three-Stage Framework for Microservice Fine-grained
+Auto-scaling in Edge Server Cluster
+Kai Peng , Zhanhao Zhang , Shangwen Zhuang, Jiacheng Wang, Menglan Hu ,
+Tianyue Zheng, and Zehui Xiong
+
+Abstract—The advancement of edge computing and lightweight
+containerization technologies has spurred the adoption of the
+microservices architecture. However, microservice scheduling in
+edge environments faces significant challenges. The first challenge
+lies in the tight coupling between microservice deployment and
+request routing, which is often overlooked in existing research.
+This neglect will lead to the failure to obtain the system optimal
+solution. Secondly, user requests in edge environments are highly
+unstable and difficult to predict. Existing static or passive scaling
+strategies cannot cope with this dynamic nature, resulting in
+the increase of user request latency and the decrease of system
+resource utilization. Finally, scheduling large-scale microservices
+usually incurs high computational overhead, and existing solutions that rely on redeployment are less cost-effective. At the same
+time, such methods are also unable to support fast, real-time
+adjustment, further limiting their practicality in real-world edge
+environments. Therefore, this paper proposes a new three-stage
+AutoLFD algorithm to address these challenges. This algorithm
+combines Lyapunov optimization, first-fit diminishing (FFD),
+and deep reinforcement learning (DRL) to perform fine-grained
+auto-scaling of microservices, minimizing user request latency
+while keeping system costs within a controllable range. Through
+detailed model analysis and strategy design, it jointly optimizes
+microservice deployment and request routing to ensure that the
+system obtains the optimal solution. Extensive experimental results demonstrate that AutoLFD significantly outperforms stateof-the-art algorithms, achieving substantial reductions in latency
+(by 9.86%) and cost (by 8.02%).
+Index Terms—Microservice auto-scaling, Edge computing,
+Lyapunov optimization, Deep reinforcement learning.
+
+I. I NTRODUCTION
+
+W
+
+ITH the rapid proliferation of the Internet of Things
+(IoT), and latency-sensitive AI applications [1], traditional cloud-centric architectures are increasingly inadequate
+to support the stringent demands of emerging services [2]. To
+bridge this gap, edge computing has emerged as a promising
+paradigm that brings computation and intelligence closer to
+Manuscript received April 19, 2021; revised August 16, 2021.
+This work is supported in part by the National Natural Science Foundation
+of China under Grant 62171189, and in part by the Key Research and
+Development Program of Hubei Province, China under Grants 2024BAA011,
+2024BAB016, and 2024BAB031. (Corresponding author: Menglan Hu.)
+Kai Peng, Zhanhao Zhang, Shangwen Zhuang, Jiacheng Wang, and
+Menglan Hu are with the Hubei Key Laboratory of Internet of Intelligence, School of Electronic Information and Communications, Huazhong
+University of Science and Technology, Wuhan 430074, China (e-mail:
+pkhust@hust.edu.cn; d202481226@hust.edu.cn; z15078382658@163.com;
+w651376825@gmail.com; humenglan@hust.edu.cn;)
+Tianyue Zheng is with the School of Computer Science and Engineering,
+Southern University of Science and Technology, Shenzhen, China (e-mail:
+zhengty@sustech.edu.cn)
+Zehui Xiong is with the School of Electronics, Electrical Engineering and
+Computer Science, Queen’s University Belfast (e-mail: z.xiong@qub.ac.uk)
+
+data sources [3], [4]. Edge server clusters are widely deployed in urban or industrial environments to provide highperformance and low-latency support for delay-sensitive tasks
+[5], [6]. Due to the limited resources of the edge environment,
+the traditional monolithic service architecture is no longer applicable. The microservice architecture has gained significant
+traction in edge computing scenarios due to its modular and
+distributed nature [7].
+By decomposing monolithic applications into loosely coupled, independently deployable services, microservices promote scalability, fault isolation, and fine-grained resource management across heterogeneous edge nodes [8], [9]. However,
+despite the enormous resource management and scheduling advantages brought about by microservice architecture, orchestrating and scaling microservices in the cluster environment
+of edge servers remains a difficult challenge [10]. The highly
+dynamic and resource-constrained edge environment, coupled with complex service dependencies and fluctuating user
+demands, imposes significant barriers to achieving efficient,
+low-latency, and energy-aware microservice management [11],
+[12]. These challenges call for adaptive and intelligent orchestration mechanisms to ensure service-level objectives (SLOs)
+under strict latency and resource constraints. However, there
+are still some limitations in the existing studies [13], [14].
+First, due to the limited resources of edge servers, a complete service is hard to execute solely on a single server.
+Consequently, a service chain often needs to be decomposed
+into multiple microservices, which are then instantiated across
+different servers. This results in a complex optimization
+problem involving both microservice deployment and request
+routing. Moreover, there exists a strong coupling between deployment and routing, the two processes significantly influence
+each other. However, most existing studies treat microservice
+deployment and request routing as independent optimization
+tasks [15]–[17], neglecting their mutual interdependencies.
+Optimizing only microservice deployment or request routing
+often leads to optimal results in one dimension but creates bottlenecks or inefficiencies in the other dimension. Ultimately,
+preventing the global optimal solution of system performance.
+Second, user requests in edge environments are dynamic
+and difficult to predict [18]. Designing effective strategies
+to adapt to such fluctuating demands under constrained edge
+resources is a major challenge. Many existing studies optimize
+microservice deployment and routing based on the assumption
+that the request flow remains static [16], [19]. These static
+strategies cannot accommodate dynamic traffic patterns, often
+resulting in increased request failures and higher service
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+latency under long-term traffic fluctuations. Some studies
+have considered the dynamic nature of request flows [20].
+However, most adopt reactive adjustments that are made only
+after the traffic variation occurs. Such reactive strategies are
+inherently delayed and can be particularly problematic in
+handling chained microservice requests, where the blockage
+of a single microservice may lead to system-wide failure.
+Finally, balancing operational cost with service quality is
+paramount for practical edge service deployment. Service
+providers must ensure quality of service (QoS) while maintaining economic viability through efficient resource utilization.
+Given the scarcity of edge resources, it is critical to reduce
+the number of microservice instances to avoid unnecessary
+consumption. Some studies propose re-deployment strategies
+to address dynamic request patterns [21], [22]. However,
+frequently shutting down and restarting a large number of microservice containers results in significant energy consumption
+and high operational costs. Additionally, re-deployment often
+incur long scaling times, making the system susceptible to
+instability under rapid traffic changes.
+Aiming at the above research gaps, this paper aims to
+design a better auto-scaling method. However, The following
+challenges will be faced in the design process. First, due to the
+coupling relationship between microservice deployment and
+request routing, it is necessary to reasonably model the system,
+decouple them and implement joint optimization to ensure the
+optimal solution. Secondly, user requests in edge environments
+are complex and difficult to predict. At the same time, it is
+important to ensure the stability of the system. Therefore, how
+to accurately predict the request arrival rate of the next time
+slot and make adjustments in time is a great challenge. Finally,
+due to the limited cooling and power resources in the edge
+scenario and the strict control of overhead required by most
+private server clusters, it is also a challenge to guarantee low
+latency levels and QoS at a limited cost.
+To this end, in order to address the above challenges and fill
+the research gap. This paper proposes an new three-stage algorithm called AutoLFD. This algorithm combines Lyapunov
+optimization, first-fit diminishing (FFD), and deep reinforcement learning (DRL) to perform fine-grained auto-scaling of
+microservices, minimizing user request latency while keeping
+system costs within a controllable range. Through detailed
+model analysis and strategy design, it jointly optimizes microservice deployment and request routing to ensure that the
+system obtains the optimal solution. In summary, the main
+contributions of this paper are as follows:
+• This paper introduces the Jcakson queuing theory and
+models the process of user requests waiting for microservice instance processing as a queuing system [23].
+The entire microservice system is then modeled using
+an open Jackson queuing network, integrating queuing
+latency, communication latency, and processing latency
+to establish a comprehensive analytical model for system
+request-response latency.
+• This paper proposes a three-stage algorithm, AutoLFD,
+to solve this NP-hard problem. First, based on Lyapunov
+optimization theory [24], we transform the long-term
+stability problem of microservice deployment cost and
+
+2
+
+request latency into an optimization problem within a
+single time slot. Then, based on the FFD method [25], the
+MFFD algorithm was designed for the initial deployment
+of the microservice system, which was regarded as a
+static deployment process. Finally, based on the results
+of Lyapunov optimization and DRL, MDRL algorithm
+was designed for auto-scaling of microservices.
+The organization of this paper is as follows: In Section I,
+we introduce the background and contributions of this study.
+Section II presents the related work. In Section III, we model
+the network and formulate the problem. Section IV provides
+a detailed description of our proposed algorithm. Section V
+comprehensively presents the experimental results. Finally,
+Section VI concludes the paper.
+II. R ELATED W ORK
+A. Service Deployment
+Research on microservice deployment focuses on efficiently placing loosely coupled but interdependent services
+on appropriate nodes to ensure system stability and operational efficiency. Wang et al. [26] studied resource allocation
+in cloud-edge collaborative environments under SLOs constraints, proposing a linear programming-based approximation
+algorithm to determine the optimal number of instances per
+server. Yang et al. [27] modeled the service function chain
+(SFC) deployment problem as a mixed integer nonlinear
+programming (MINLP) formulation and applied reinforcement
+learning for latency-sensitive scheduling. Li et al. [28] developed MOTAS, a scheduling framework that considers both
+microservice dependencies and cluster relationships, using a
+recursive graph mapping heuristic for cloud deployment. To
+enhance scalability, Liu et al. [29] proposed a multiobjective
+evolutionary algorithm for heterogeneous server clusters. Lv
+et al. [30] introduced GRLD, a graph reinforcement learningbased framework that reduces overhead while satisfying QoS
+constraints. However, these studies often ignore the impact
+of deployment strategies on request routing, and thus fail to
+achieve good results.
+B. Request Routing
+Microservices are often deployed across distributed environments with complex dependencies, leading to multiple
+routing options with varying latencies. The key challenge lies
+in minimizing average response time while balancing loads.
+Bhattacharya et al. [31] proposed BLOC, which balances
+load by analyzing system resource usage. Bachar et al. [32]
+designed MCOSS, adjusting load balancing weights using
+multi-cluster demand information. Wang et al. [33] formulated
+routing as a many-to-one matching game and proposed DDADQ, a dependency-aware algorithm with dynamic quotas.
+Zhao et al. [34] introduced a redundancy placement framework
+using sample average approximation to enhance responsiveness. However, most approaches ignoring its dependency on
+deployment decisions, which limits their effectiveness in highconcurrency scenarios.
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+C. Joint Service Deployment and Request Routing
+Deployment and routing are tightly interdependent placement decisions affect routing feasibility, while routing impacts
+instance loads. To address this, recent work explores joint
+optimization. Ren et al. [35] proposed JSORD, a mixed integer linear programming-based orchestration and scheduling
+mechanism. Mao et al. [36] presented a traffic-aware framework combining dynamic segmentation and nearest-neighbor
+routing. Hu et al. [37] designed a two-stage heuristic with
+greedy deployment and request-matching partition mapping.
+Peng et al. [38] proposed a 2-approximation algorithm using
+rounding for deployment and routing in mobile edge environments. Nevertheless, most methods rely on simplified queueing
+models like M/M/1 and assume static loads, limiting their
+adaptability to real-world, dynamic conditions.
+D. Auto-scaling under Dynamic Load
+To maintain performance under fluctuating workloads, microservice systems require timely resource scaling or migration. Some studies focus on instance migration. Zeng et al. [39]
+proposed ADVMC, a VM consolidation framework using deep
+reinforcement learning and host overload evaluation to reduce
+energy consumption. Liu et al. [40] presented E2MS, a migration strategy for dynamic manufacturing environments. However, these works often neglect broader scheduling constraints.
+Others target elastic scaling. Kardani et al. [41] introduced
+ADRL, which integrates anomaly detection and reinforcement
+learning for adaptive scaling. Rossi et al. [42] developed a
+scaling framework using dynamic thresholds, while Cheng et
+al. [43] proposed ProScale, leveraging workload prediction for
+cloud-edge collaboration. Still, most methods treat scaling and
+migration separately, lacking unified strategies for dynamic
+load balancing.
+
+3
+
+TABLE I
+C OMMON SYMBOLS AND VARIABLES
+Notation
+S
+M
+R
+T0
+Tmax
+CRs
+M Rs
+CRm
+M Rm
+µm
+T que
+T pro
+T pro
+TG
+c(·)
+C̃
+Nm
+Ns
+Nmchange
+Nschange
+L(·)
+Q(·)
+∆(·)
+D(·)
+
+Description
+Collection of data center servers
+Collection of microservices
+Collection of user request streams
+Fixed communication latency between servers
+Request response time limit
+CPU resources owned by server s
+Memory resources owned by server s
+CPU resources required to deploy the microservice m
+Memory resources required to deploy the microservice m
+Request processing rate of microservice m instances
+Request queuing latency
+Request processing latency
+Request communication latency
+Average request latency for a microservice graph
+The total cost function
+Average cost estimates given by the service provider
+The number of microservices
+The number of servers
+The number of changed microservice instances
+The number of changed servers
+Lyapunov function
+Lyapunov virtual queue
+Lyapunov drift function
+The optimal elastic resource scheduling scheme
+
+Fig. 1. Illustration of the microservice workflow and request splitting.
+
+III. S YSTEM M ODEL
+In this section, we will mathematically model the problem,
+and the commonly used notations are shown in Table I.
+A. Network model
+This paper focuses on edge server clusters, whose hardware
+infrastructure consists of a series of multi-core servers. The
+communication latency between two cores on the same server
+is assumed to be negligible. Meanwhile, it is assumed that different servers within the edge server cluster are capable of mutual communication, and the network bandwidth is sufficiently
+large. As a result, the communication latency between different
+servers is regarded as identical and is denoted by T0 . The
+network is modeled as G = (S, L), where S represents the set
+of all servers in the network, denoted as s1 , s2 , ..., sk , ..., s|S| ,
+and L denotes the set of links connecting these servers. The
+parameter CRs denotes the CPU resources available on server
+s, while M Rs represents the available memory resources on
+server s. Due to different microservice instances need different
+processing times, we define µm as the processing capability
+of a CPU core when executing microservice instance m.
+When a user request reaches the system, it is processed
+sequentially by a set of specific microservices. In this paper,
+
+we define M = {m1 , m2 , ..., mj , ..., m|M | } as the set of all
+microservices. The left side of Fig. 1 illustrates a typical online
+shopping scenario, in which multiple microservices invoke one
+another, forming a complex microservice invocation graph.
+This graph can be further decomposed into a set of microservice invocation chains of varying lengths, as shown on the
+right side of Fig.1. In our model, user requests are processed
+through such invocation chains, where each request follows a
+complete sequence of microservices.
+Each microservice mj may have multiple container images
+that can be deployed on a single server or distributed across
+multiple servers. In this study, multiple identical instances of
+the same microservice can be deployed on the same server to
+improve request processing capability. Let CRmj and M Rmj
+denote the CPU and memory resources required to deploy
+microservice mj , respectively, and let Nsi (mj ) denote the
+number of instances of microservice mj deployed on server
+si . The following resource constraints must be satisfied:
+∀si ∈ S,
+
+X
+1≤j≤|M |
+
+Nsi (mj ) × CRmj ≤ CRsi
+
+(1)
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+4
+
+extra communication latency. Additionally, queue lengths vary
+across servers, resulting in different queuing latencies depending on the routing decision. We adopt a probabilistic routing
+strategy to determine both the initial server and subsequent hop
+selections for each microservice invocation. The probability
+that server sk is selected to process microservice mj is defined
+as:
+Ns (mj )
+(3)
+Pmj (sk ) = P k
+s∈S Ns (mj )
+where Pmj (sk ) denotes the probability that server sk processes
+a request for microservice mj , and Nsk (mj ) represents the
+number of instances of mj deployed on sk . This probability
+satisfies the following constraint:
+X
+Pmj (sk ) = 1
+(4)
+m∈M
+
+Fig. 2. Illustration of microservice instance deployment and request routing.
+
+X
+
+∀si ∈ S,
+
+Nsi (mj ) × M Rmj ≤ M Rsi
+
+(2)
+
+1≤j≤|M |
+
+B. Request Routing
+Internet applications commonly offer various services, such
+as payment, downloading, and searching. When multiple users
+request the same service, similar requests continuously arrive
+in the system, forming what is referred to as a request stream
+Ri . Upon reaching the edge server, the request flow is routed
+to an instance of the corresponding entry microservice for
+processing. If the instance is idle, it processes the request
+immediately; otherwise, the request is placed into the instance’s waiting queue. Once the current microservice instance
+completes the request, it triggers the invocation of the next
+microservice in the chain. This process continues until the
+entire request flow is completed.
+This paper assumes that the arrival of each request flow
+Ri follows a Poisson distribution with an arrival rate λRi .
+Each request flow is associated with a maximum allowable
+latency, denoted by Tmax , such that a request is considered
+successful if the time elapsed from initiation to response is
+less than Tmax ; otherwise, it is considered failed. Based on
+the above assumptions, this paper models the process using
+an open Jackson queuing network.
+Fig. 2 presents an illustrative example. The figure shows
+that five types of microservices are deployed across an edge
+server cluster. Three request flows R1 , R2 , and R3 are
+shown, with the following microservice invocation sequences:
+R1 = {m4 , m1 , m5 , m2 }, R2 = {m1 , m3 , m4 , m2 }, R3 =
+{m5 , m4 , m1 , m3 }. When a request flow R1 enters the system,
+it is routed to a server hosting an instance of m4 , such as s1
+or s5 . Assuming it is directed to s1 and successfully processed
+by m4 , the next invocation targets microservice m1 . Since m1
+is available on both s1 and s3 , the request may be routed to
+either. Considering that the internal communication latency
+of the server is negligible, remaining within s1 incurs no
+additional transmission latency, while routing to s3 introduces
+
+Since each request stream follows a Poisson process, and
+due to the additive property of Poisson processes, the aggregate
+request flow at a server also follows a Poisson distribution.
+When multiple instances of the same microservice are deployed on a server, the system can be modeled as an M/M/C
+queuing system, where C denotes the total number of deployed
+instances of the microservice. The service intensity ρm of this
+queuing system is defined as:
+ρm =
+
+λm
+,
+cm µm
+
+∀m ∈ M
+
+(5)
+
+where µm denotes the service rate of a single instance
+of microservice m. For system stability, it is required that
+ρm < 1; otherwise, the request arrival rate exceeds the processing capacity, leading to queuing congestion and increased
+request failures. In a stable system, the average number of
+queued requests for microservice m is denoted by Lm and is
+calculated as:
+
+
+1
+λm
+ρm
+Lm =
+P 0 , ∀m ∈ M (6)
+cm ! cm µm (1 − ρm )2 m
+0
+where Pm
+is the steady-state probability that no requests are
+in the system, computed as:
+"c −1 
+
+
+cm #−1
+m
+X
+1
+λm
+1
+1
+λm
+0
+Pm =
++
+i! cm µm
+cm ! 1 − ρm cm µm
+i=0
+(7)
+Due to the complexity of microservice interactions, a given
+request type may traverse multiple routing paths, each incurring different end-to-end latencies. Therefore, this paper
+adopts a weighted averaging approach to estimate the response
+latency for each request flow based on all possible routing
+paths. Let Mr denote the microservice invocation sequence
+corresponding to request flow Ri , and let the set of all feasible
+routing paths for Ri be denoted as GRi = {g1 , g2 , ..., g|GRi | }.
+Each routing path gk has an associated probability P (gk )
+representing the likelihood that Ri follows this path. This
+probability is computed as:
+Y
+P (gk ) =
+Pmj (sk )
+(8)
+mj ∈Mr
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+and satisfies the normalization condition:
+X
+P (gk ) = 1
+
+5
+
+(9)
+
+gk ∈GRi
+
+In the following, we conduct a detailed analysis of request
+response time. The total response latency of a request flow
+consists of three components: queuing latency, processing latency, and communication latency. These latency components
+are analyzed separately along a specific routing path pak .
+Queuing Latency: Time the request spends waiting for the
+microservice instance to be processed. We denote the average
+queuing latency of microservice m as tque
+m , which is calculated
+as:
+
+
+1
+λm
+ρm
+Lm
+que
+P0
+(10)
+=
+tm =
+λm
+λm cm ! cm µm (1 − ρm )2 m
+Thus, the average queuing latency for a request flow Ri along
+a specific routing path is:
+X
+T que =
+tque
+(11)
+m
+m∈Mr
+
+Processing Latency: The time taken by the microservice
+instance m to process the corresponding microservice request.
+We denote the processing latency of microservice m as tpro
+m ,
+which is calculated as:
+1
+(12)
+tpro
+m =
+µm
+For the same request flow, the sequence of microservices
+passed through any routing path is the same, and the processing power of the server core is also the same. Thus, the
+processing latency of the request flow Ri is independent of
+the routing path, and the average processing latency of any
+routing path is:
+X
+T pro =
+tpro
+(13)
+m
+
+Finally, a weighted coefficient ϕi is defined according to the
+importance of each request flow Ri , and after the weighted
+average, the average request-response latency of the whole
+microservice graph can be obtained:
+X
+ϕi Ti
+(18)
+TG =
+Ri
+
+C. Initial System Optimization Goal
+Auto-scaling of microservices presents a long-term challenge, where the objective is to ensure cost-efficient system
+operation while maintaining high QoS for users over time. The
+total cost considered in this work comprises two components.
+The first component is the running cost, denoted by c1 (t),
+which is directly related to the number of deployed microservice instances Nm (t) and the number of active servers Ns (t).
+It is defined as:
+c1 (t) = α · Nm (t) + β · Ns (t)
+
+where α denotes the resource cost of operating a single
+microservice instance, and β represents the resource cost of
+operating a single server.
+The second component corresponds to the cost of resource
+scheduling, primarily incurred by the deployment or removal
+of microservice instances and the activation or deactivation of
+servers. This cost is proportional to the changes in the number
+of microservices Nmc (t) and servers Nsc (t), and is defined as:
+c2 (t) = γ · Nmc (t) + ρ · Nsc (t)
+
+Communication Latency: The time it takes for the request
+to be transferred inside the microservice system. We use tcom
+m
+to denote the communication latency between microservice m
+and its predecessor microservice on a routing path, which is
+computed as:
+tcom
+= f lag(m) × T0
+(14)
+m
+where f lag(m) is a binary variable that indicates whether the
+subsequent microservice of m is deployed on a different server.
+If the microservice deployed on the same server, f lag(m) = 0;
+otherwise, f lag(m) = 1. Thus, the total transmission latency
+for a request flow Ri along a routing path is:
+X
+T com =
+tcom
+(15)
+m
+m∈Mr
+
+(20)
+
+where γ denotes the cost of deploying or removing a single
+microservice instance, and ρ represents the overhead associated with activating or deactivating a server. Consequently, the
+total cost at the time slot t is expressed as:
+c(t) = ω1 · c1 (t) + ω2 · c2 (t)
+
+m∈Mr
+
+(19)
+
+(21)
+
+where ω1 and ω2 are weighting coefficients used to balance
+the trade-off between running cost and scheduling cost.
+Let C̃ denote the long-term time averaged cost budget
+specified by the service provider. The total cost must satisfy
+the following constraint:
+T −1
+
+1 X
+E[c(t)] ≤ C̃
+T →∞ T
+t=0
+lim
+
+(22)
+
+Based on the above definitions, the elastic resource scheduling problem under dynamic system load can be formulated as
+optimization problem P1:
+min TG (t)
+
+(23)
+
+Based on the above definitions, the total response latency
+Ti,k for a request flow Ri along a specific routing path gk is:
+
+subject to: Constraints given in Eqs. (1), (2), and (22).
+
+Ti,k = T que + T pro + T com
+
+IV. A LGORITHM
+
+(16)
+
+By using the probability of each path as the weighting coefficient, the average request response latency Ti of the request
+flow in all routing paths can be obtained.
+X
+Ti =
+P (gk ) × Ti,k
+(17)
+gk ∈GRi
+
+In this section, we elaborate on the proposed algorithm. The
+system timeline is discretized into fixed length time slots of 5
+minutes each, yielding a total of 288 time slots over a 24-hour
+period. The arrival rate of user requests changes dynamically
+in different time slots. Specifically, our algorithm AutoLFD
+consists of the following three phases.
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+6
+
+A. Problem Transformation via Lyapunov Optimization
+Given that problem P1 is formulated as a time-averaged
+optimization problem, Lyapunov optimization theory offers a
+principled approach to transform it into a tractable per-slot
+optimization problem by introducing a virtual queue. Specifically, we define a virtual queue Q(t) to monitor the cumulative
+deviation of the actual cost from the budget constraint over
+time, thereby capturing the backlog of cost violations at the
+end of time slot t. The virtual queue is updated in each time
+slot according to the following rule:
+n
+o
+Q(t + 1) = max Q(t) + c(t) − C̃, 0
+(24)
+where the initial value is set as Q(0) = 0. According to
+Lyapunov optimization theory, if the virtual queue satisfies
+the condition of mean rate stability, the following holds:
+E[Q(T )]
+=0
+T →∞
+T
+lim
+
+(25)
+
+Lemma 1: If the virtual queue Q(t) satisfies the stability
+given in Eq. (25), then the time-average constraint of the total
+cost given in Eq. (22) is also satisfied.
+Proof. From Eq. (24), we have:
+
+Q(T ) − Q(0) = Q(T ) ≥
+
+T
+−1
+X
+
+c(t) −
+
+t=0
+
+T
+−1
+X
+
+C̃
+
+(27)
+
+t=0
+
+Dividing both sides by T and rearranging terms gives:
+T −1
+T −1
+Q(T )
+1 X
+1 X
+c(t) ≤
++
+C̃
+T t=0
+T
+T t=0
+
+(28)
+
+Taking expectations on both sides and letting T → ∞, we
+obtain:
+lim
+
+1
+
+E[c(t)] ≤ lim
+
+T →∞
+
+t=0
+
+Proof. From Eqs. (31), and (32), we have:
+
+1 
+∆(t) = E Q(t + 1)2 − Q(t)2 | Q(t)
+(34)
+2
+From Eq. (24), we obtain:
+n
+h
+io2
+Q(t + 1)2 = max Q(t) + c(t) − C̃, 0
+
+2
+
+
+≤ Q(t)2 + c(t) − C̃ + 2Q(t) c(t) − C̃
+(35)
+Substituting Eq. (35) into Eq. (34) yields:
+
+
+2
+
+
+1 
+∆(t) ≤ E c(t) − C̃ + 2Q(t) c(t) − C̃ | Q(t)
+2
+i
+h
+i
+1 h
+e 2 | Q(t) + E Q(t)(c(t) − C)
+e | Q(t)
+= E (c(t) − C)
+2
+(36)
+
+(26)
+
+Subtracting Q(t) from both sides and summing over all time
+slots t ∈ {0, 1, . . . , T − 1} yields:
+
+T →∞ T
+
+where δ is a constant.
+
+From Eqs. (19), (20), and (21), we have:
+
+Q(t + 1) ≥ Q(t) + c(t) − C̃
+
+T
+−1
+X
+
+Lemma 2: There exists a certain upper bound on the
+Lyapunov drift in Eq. (32) as follows:
+h
+i
+∆(t) ≤ δ + E Q(t)(c(t) − C̃) | Q(t)
+(33)
+
+E[Q(T )]
++ C̃
+T
+
+T −1
+
+1 X
+E[c(t)] ≤ C̃
+T →∞ T
+t=0
+
+(30)
+
+By Lemma 1, the constraint given in Eq. (22) in problem P1
+can be transformed into a constraint given in Eq. (25). To solve
+this problem, we introduce a Lyapunov function L(t) based
+on the Lyapunov optimization theory:
+1
+L(t) = Q(t)2
+2
+Then, the Lyapunov drift ∆(t) is defined as:
+∆(t) = E [L(t + 1) − L(t) | Q(t)]
+
++ ω2 · (γ · Nmc (t) + ρ · Nsc (t))
+
+(31)
+
+(32)
+
+(37)
+
+Here, Nm (t), Ns (t), Nmc (t), and Nsc (t) denote the number
+of microservices, servers, changed microservice instances, and
+changed servers at time slot t, respectively. These variables are
+bounded above by their respective maximum values, namely
+max
+max
+max
+. Accordingly, Eq. (36) can
+, and Nsc
+Nm
+, Nsmax , Nmc
+be further relaxed as follows:
+h
+
+
+i
+∆(t) ≤ δ + E Q(t) c(t) − C̃ | Q(t)
+(38)
+where
+δ=
+
+1
+max
+ω1 · (α · Nm
++ β · Nsmax )
+2
+
+(29)
+
+When the virtual queue Q(t) achieves mean rate stability,
+Eq. (25) holds, which leads to the constraint given in Eq. (22):
+lim
+
+c(t) = ω1 · (α · Nm (t) + β · Ns (t))
+
+!2
+max
+max
++ ω2 · (γ · Nmc
++ ρ · Nsc
+) − C̃
+
+is a constant.
+To maintain the stability of the virtual queue while minimizing the average response time, the optimization objective
+is decomposed into each time slot t. A control parameter
+V is introduced to balance the trade-off between these two
+components. The resulting drift-plus-penalty function for each
+time slot is defined as:
+∆(t) + V · E[TG (t) | Q(t)]
+
+(39)
+
+As indicated in Eq. (32), the Lyapunov drift term ∆(t) in Eq.
+(39) depends on the future queue backlog Q(t+1), suggesting
+that solving the drift-plus-penalty function at time t would
+require foresight of future system states. To overcome this
+limitation, we relax Eq. (39) by minimizing its upper bound.
+Applying Lemma 2, we obtain:
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+7
+
+Algorithm 1 MFFD
+∆(t) + V · E[TG (t) | Q(t)] ≤ β + E[Q(t)(c(t) − C̃) | Q(t)]
++ V · E[TG (t) | Q(t)]
+(40)
+Following Lyapunov optimization, the original problem is
+transformed into minimizing the upper bound in Eq. (40). This
+leads to the following equivalent optimization formulation:
+
+min β − E[Q(t) · C̃ | Q(t)]
+
+(41)
++ E[Q(t)c(t) + V · TG (t) | Q(t)]
+In this expression, the first term β is a constant. The second
+term is also constant since Q(t) is observed and remains fixed
+within the current time slot. The third term depends on the
+total cost c(t) and the average response latency TG (t), both
+of which are determined by the scheduling policy D(t).
+Based on the above derivation, the original long term
+optimization problem P1 can be reformulated as a per-slot
+decision making problem, denoted as problem P2, using the
+drift-plus-penalty approach. problem P2 is formulated as:
+min E [Q(t)c(t) + V · TG (t) | Q(t)]
+D(t)
+
+(42)
+
+subject to: Constraints given in Eqs. (1) and (2).
+Here, D(t) represents the optimal elastic resource scheduling policy for the time slot t. To simplify computation, the
+minimization of the conditional expectation in problem P2
+can be equivalently transformed into the minimization of the
+unconditional expectation, as discussed in [24]. The resulting
+simplified form of the problem P2 is expressed as:
+min [Q(t)c(t) + V · TG (t)]
+D(t)
+
+(43)
+
+subject to: Constraints given in Eqs. (1) and (2).
+B. MFFD for Initial Solution Construction
+At the beginning of the system, microservice instances need
+to be deployed for the first time. This paper assumes that
+the initial request flow is known in advance. In this paper,
+MFFD is designed based on the FFD algorithm to perform the
+initial deployment of microservice instances. The pseudocode
+is shown in Algorithm 1. The specific steps are as follows:
+Step 1: Sort the microservices based on their resource
+requirements. Specifically, microservices are arranged in descending order of their CPU and memory demands. This
+prioritization ensures that resource-intensive microservices are
+deployed first, which improves resource utilization and better
+aligns with the residual capacity of the nodes.
+Step 2: Compute the total request arrival rate for each
+microservice type across all request flows. To guarantee system stability, the service intensity ρ < 1 must be satisfied.
+Accordingly, the required number of instances is calculated
+using the following equation:
+
+
+λ
+(44)
+numm = (1 + ϵ) ·
+µ
+
+1: Input: M ; S; CRs ; M Rs ; CRm ; M Rm ; λ; ϵ
+2: Output: Initial microservice deployment scheme s0
+3: Sort microservices in M by CRm and M Rm in descending
+
+order
+4: for each microservice m ∈ M do
+5:
+Compute required instances: numm
+6:
+for each server s ∈ S do
+7:
+Determine available capacity cs on node s:
+Rm
+m
+8:
+cs = min{⌊ CR
+⌋, ⌊ M
+⌋}
+CRs
+M Rs
+9:
+Deploy min(cs , numm ) instances of m on node s
+10:
+Update server CRs and M Rs
+11:
+if CRs < CRm or M Rs < M Rm then
+12:
+break
+13:
+end if
+14:
+end for
+15: end for
+16: Return Deployment scheme s0
+
+where ⌈·⌉ denotes the ceiling function, and ϵ represents the
+excess margin, set to 0.1 in this experiment. The resulting
+number of instances is then scheduled for deployment across
+the available nodes.
+Step 3: Traverse the nodes sequentially and determine
+the maximum number of microservice instances that can be
+accommodated on each node based on the remaining CPU
+and memory resources. If a node has sufficient resources,
+deploy as many instances as possible and update the node’s
+resource status accordingly. If the current node cannot host all
+remaining instances, deploy as many as feasible on that node
+and proceed to allocate the rest to subsequent nodes. This
+process continues until all instances are deployed or available
+resources are exhausted.
+C. MDRL for Microservice Auto-scaling
+This paper uses the DRL method based on proximal policy
+optimization (PPO) [44] architecture, and combines the results
+of Lyapunov optimization to design the MDRL algorithm. The
+overall structure of the algorithm is illustrated in Fig. 3, and
+the corresponding pseudocode is provided in Algorithm 2.
+The core of the algorithm adopts an actor-critic architecture,
+primarily consisting of a deep neural network (DNN), a actor
+network, and a critic network. The algorithm predicts the
+request arrival rate for the next time slot. The action to
+be executed in the next time slot is determined during the
+current time slot, and is then applied once the next time slot
+begins. The design of the state space, action space, and reward
+function in this algorithm is described as follows:
+State: The agent needs to learn the state of the data center
+environment. A well-designed state space enables the agent
+to learn the environment more comprehensively. In this study,
+the state space is defined as:
+State = {rM R , rCR , Cm , Rhis }
+
+(45)
+
+where rM R denotes the remaining memory of each server,
+and rCR represents the remaining CPU capacity. The variable
+Cm indicates the currently deployed microservices and their
+quantities on each server. The historical record of request
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+8
+
+Fig. 3. MDRL algorithm structure diagram.
+
+arrival rates, denoted as Rhis , is used to predict the arrival
+rate for the upcoming time slot.
+Action: The agent adjusts the deployment of microservices
+through actions to adapt to the dynamic variations in microservice request patterns and achieve the optimization objective.
+The action space is defined as:
+Action = {si , mj , Nchange }
+
+(46)
+
+where si is the selected server, mj is the selected microservice
+type, and Nchange represents the change in the number of
+instances of mj , ranging from -3 to 3. Thus, an action
+indicates either an increase or a decrease in the number of mj
+instances on server si by Nchange , as illustrated in Fig. 4. If
+a server hosts no microservice instances, it will be shut down.
+Additionally, the intelligent agent is restricted from executing
+the following invalid actions:
+• If the agent attempts to increase the number of a specific
+microservice type on a server, but the required memory
+or CPU exceeds the server’s resource limits, the action is
+canceled. Instead, the agent is allowed to deploy only as
+many instances as permitted within the server’s resource
+constraints.
+• If the agent attempts to reduce the number of a specific
+microservice type on a server by more than the number
+of existing instances, the action is canceled. The agent
+should instead remove all existing instances of that microservice on the server.
+Reward: The design of the reinforcement learning reward
+function plays a critical role in determining the performance
+of the learning process and directly impacts the convergence
+behavior of the model. Based on our investigation, we find
+that in a complex and continuous decision space such as
+microservice resource scheduling, designing effective rewards
+and penalties is particularly challenging. An overly complex
+penalty structure may hinder the agent’s exploration, leading it
+to converge prematurely to a suboptimal solution. Therefore, in
+this study, we adopt a deliberately simple reward design, while
+applying the aforementioned avoidance strategies to filter out
+invalid actions. This approach allows the agent to focus more
+
+Algorithm 2 MDRL
+1: Input: Initial environment s0 ; Learning rate η; Discount factor
+
+γ; GAE parameter λ̂; Clipping coefficient ϵ; Coefficients of loss
+φ1 , φ2 , φ3 ; Number of iterations K; Training epochs E; Update
+epochs N
+2: Initialize Actor-Critic network
+3: Initialize optimizer with learning rate η
+4: for iteration = 1 → K + 1 do
+5:
+Reset environments and get initial observation s0
+6:
+for step = 0 → E − 1 do
+7:
+Select action at ∼ πθ (at |st ) using Actor network
+8:
+Get value function V (st ) using Critic network
+9:
+Execute at , get reward rt :
+10:
+Update observation to st+1
+11:
+Compute TD error δt
+12:
+Compute advantage function At via GAE(γ, λ̂)
+13:
+Compute returns Gt
+14:
+for epoch = 1 → N do
+15:
+for each minibatch do
+16:
+Compute policy loss Lpolicy , value loss Lvalue , and
+entropy loss Lentropy
+17:
+Compute total loss:
+L = φ1 Lpolicy + φ2 Lentropy + φ3 Lvalue
+18:
+Update θ via gradient ascent with ∇θ L
+19:
+end for
+20:
+end for
+21:
+end for
+22:
+Update learning rate if using scheduler
+23:
+Log training metrics and save model checkpoints
+24: end for
+
+effectively on the optimization objective and better explore
+potential optimal solutions. Based on the results of Lyapunov
+optimization, the reward function is defined as follows:
+Reward = − [Q(t)c(t) + V · TG (t)]
+
+(47)
+
+Training Process: During the training process, both the
+environment and the neural networks are first initialized.
+The training then proceeds through four key steps: action
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+9
+
+Fig. 4. Illustration of the instance scaling.
+
+execution, advantage estimation and reward calculation, loss
+computation, and parameter update. The detailed procedure is
+as follows:
+Step 1: The agent observes the current state st from the
+environment, uses the actor network to generate a probability
+distribution π(at |st ), and samples an action at accordingly.
+Moreover, the critic network estimates the value function
+V (st ). After executing the action, the agent transitions to a
+new state st+1 and receives a reward rt , which is computed
+as shown in Eq. (47).
+Step 2: At the end of each training epoch, the generalized
+advantage estimation (GAE) method is employed to compute
+the advantage function at each time step. The advantage
+function measures the relative benefit of the chosen action
+compared to the baseline and is recursively computed as:
+At = δt + γ λ̂At+1
+
+(48)
+
+where γ is the discount factor, and λ̂ is the GAE decay
+parameter. The temporal-difference (TD) error δt is calculated
+as:
+δt = rt + γV (st+1 ) − V (st )
+
+(49)
+
+Based on this, the return Gt is computed as:
+Gt = At + V (st )
+
+(50)
+
+Step 3: To balance policy exploration and stability, the total
+loss function consists of three components: policy loss, value
+loss, and entropy loss. The policy loss guides the optimization
+of the actor network and is defined as:
+Lpolicy = Et [min (rt (θ)At , clip(rt (θ), 1 − ϵ, 1 + ϵ)At )] (51)
+t)
+Here, rt (θ) = ππθθ (a(at |s
+is the importance sampling ratio,
+t |st )
+old
+which quantifies the difference between the current policy and
+the previous one. The clip function prevents overly large policy
+updates, thereby improving training stability.
+The entropy loss encourages exploration and avoids premature convergence to suboptimal policies. It is computed as:
+
+Lentropy = −Et [πθ (at |st ) log πθ (at |st )]
+
+(52)
+
+The value loss updates the critic network by minimizing the
+Mean Squared Error (MSE) between the predicted value and
+the actual return:
+i
+1 h
+2
+Lvalue = Et (V (st ) − Gt )
+(53)
+2
+The overall loss function is then expressed as a weighted
+sum of the three individual loss terms:
+L = φ1 Lpolicy + φ2 Lentropy + φ3 Lvalue
+
+(54)
+
+where φ1 , φ2 , and φ3 are the coefficients corresponding to
+the policy, entropy, and value loss components, respectively.
+Step 4: The final loss function is used for backpropagation
+to update the network parameters accordingly.
+V. E XPERIMENTS
+A. Experimental Setup
+User Request Configuration: The experiment is based
+on the Social Network microservice application from the
+DeathStar dataset [45]. This application is decomposed, and
+a subset of its microservice chains is extracted for use. The
+experimental setup includes ten server nodes and ten types of
+user request flows. Two types of load fluctuation patterns are
+considered. The overall request arrival rate varies according to
+the selected load curve, with different random perturbations
+applied to each individual request stream. The aggregate
+system load variation is illustrated in Fig. 5, and the specific
+settings are as follows:
+1) Sinusoidal Load Variation Model (Sin): A sine function is used to simulate the variation in system load,
+with one full sine cycle corresponding to a single day.
+The specific calculation is given by:
+
+
+2πt
+λi (t) = a + b sin
++ ni
+(55)
+T1
+where λi (t) represents the variation in request arrival
+rate over time, a is set to 15, b is set to 10, and T1 is
+set to 288. The term ni is a random disturbance within
+the range [−5, 5].
+2) Real Twitter App Data (Twitter): It is found that the
+system load change rule of every day is basically the
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+0
+
+Reward
+
+Twitter
+Sin
+
+Lambda
+
+30
+27
+24
+21
+18
+15
+12
+9
+6
+
+10
+
+50
+
+100
+
+150
+Timeslot
+
+200
+
+250
+
+300
+
+Fig. 5. Request load dynamic change curve.
+
+same. Therefore, the load change data of the Twitter
+application system on November 1, 2022, is used as
+experimental data, and the load change law is retained
+through certain mathematical transformations to keep the
+obtained system load within the affordable range of this
+experimental microservice system.
+Comparison Algorithm: To qualitatively and effectively
+evaluate the performance of our algorithm, this study compares
+it against the following benchmark algorithms:
+• PPA [46]: PPA performs microservice auto-scaling in
+edge environments based on Kubernetes. It considers not
+only CPU utilization but also additional metrics such as
+job queue length, I/O activity, and request arrival rates.
+• ProScale [43]: Proscale leverages simple moving Average (SMA) to predict the future load of each microservice
+in real time, and dynamically adjusts the number of instances of each microservice and its deployment location
+through a greedy algorithm.
+• RL agent [47]: This method employs reinforcement
+learning to design a proactive cloud resource auto-scaler,
+which predicts the usage of the entire distributed microservice application and performs timely scaling adjustments. The design of the reward function focuses on
+the request success rate.
+Evaluation index:
+• Average request latency: The average end-to-end latency of all application request flows in the current time
+slot is calculated as Eq. (18).
+• Cost: The total cost of deploying and running a microservice instance is given in Eq. (21).
+• Request success rate: We set the maximum request
+latency to 60 ms, and if the request flow takes longer
+than the maximum request latency, the request will be
+considered a failure.
+B. Experimental Results
+In this section, we conduct a comprehensive experimental
+evaluation of our algorithm. As illustrated in Fig. 6, the
+proposed algorithm exhibits consistent and stable convergence
+once training progresses beyond 1,000 iterations. This empirical observation effectively validates the soundness and
+effectiveness of our reward function design.
+To facilitate a visual comparison, we begin by observing
+the average performance of each algorithm over a full day, as
+a single day captures a complete cycle of request arrival rate
+fluctuations. The experiments evaluate the algorithms in terms
+of average request latency, average energy consumption, and
+
+0.8 ×10
+1.2
+1.6
+2.0
+2.4
+2.8
+3.2
+3.6
+4.0
+
+1
+
+Twitter
+Sin
+
+0
+
+250
+
+500
+
+750
+
+1000 1250
+Epoch
+
+1500
+
+1750
+
+2000
+
+Fig. 6. Training convergence curve.
+
+1.0
+
+1.0
+
+0.8
+
+0.8
+
+0.6
+0.4
+0.2
+
+0.6
+RL Agent
+Proscale
+PPA
+Ours
+
+0.0 Latency
+
+Cost Success Rate
+
+(a)
+
+0.4
+0.2
+
+RL Agent
+Proscale
+PPA
+Ours
+
+0.0 Latency
+
+Cost Success Rate
+
+(b)
+
+Fig. 7. Request latency, cost and request success rate averaged over the
+course of a day for two load variation curves. (a) Sin variation curve. (b)
+Twitter variation curve.
+
+average request success rate throughout the day. Fig. 7 presents
+the average performance of the proposed algorithm across the
+three metrics: request latency, cost, and request success rate.
+To ensure consistency in scale, all metric values are normalized
+to the range [0, 1]. Specifically, 0 is mapped to 0, the maximum
+value in each metric is mapped to 1, and all other values are
+linearly scaled accordingly.
+As shown in Fig. 7(a), under the Sin load variation curve,
+our algorithm improves the three metrics by 9.86%, 8.02%,
+and 6.85%, respectively, compared to the currently best performing ProScale algorithm. Similarly, Fig. 7(b) shows that
+under the Twitter load variation curve, our algorithm achieves
+improvements of 21.72%, 4.47%, and 17.85% across the
+same three metrics. PPA, as a widely used threshold-based
+autoscaling algorithm in Kubernetes, also achieves reasonable
+performance in terms of request latency and success rate.
+However, it lacks effective control over system operational
+cost and does not account for communication latency caused
+by routing, leading to higher resource waste. In contrast, our
+algorithm effectively balances system operational cost and user
+request latency. Moreover, it prevents network congestion and
+ensures the overall quality of service for end users.
+To evaluate the experimental results in greater detail, we examine the time slot variation curves of request latency and cost
+over a one-day period under different load variation patterns.
+Fig. 8 illustrates the time-slot variation in request latency under
+the two load variation curves. When the request arrival rate is
+low, the average request latency of the service graph remains
+low under the proposed algorithm. As the arrival rate increases,
+the agent is able to effectively select appropriate microservice
+instances for scaling, thereby maintaining the stability of
+request latencies and ensuring the quality of service for users.
+Fig. 9 depicts the time slot variation in cost under the two
+load variation curves. Due to the stabilizing effect of Lyapunov
+optimization on the virtual queue, the cost fluctuates around
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+RL Agent
+Proscale
+PPA
+Ours
+
+Latency
+
+200
+180
+160
+140
+120
+100
+80
+
+11
+
+0
+
+50
+
+100
+
+150
+Timeslot
+
+200
+
+250
+
+300
+
+(a)
+RL Agent
+Proscale
+PPA
+Ours
+
+Latency
+
+250
+225
+200
+175
+150
+125
+100
+75
+
+0
+
+50
+
+100
+
+150
+Timeslot
+
+200
+
+250
+
+300
+
+(b)
+Fig. 8. Time slot variation of request latency under two load variation curves.
+(a) Sin variation curve. (b) Twitter variation curve.
+
+0 50 100 150 200 250 300
+Timeslot
+
+50
+45
+40
+35
+30
+25
+20
+15
+
+RL Agent
+Proscale
+PPA
+Ours
+
+Cost
+
+RL Agent
+Proscale
+PPA
+Ours
+
+Cost
+
+47.5
+45.0
+42.5
+40.0
+37.5
+35.0
+32.5
+30.0
+27.5
+
+0
+
+(a)
+
+50 100 150 200 250 300
+Timeslot
+
+(b)
+
+Fig. 9. Time slot variation of request latency under two load variation curves.
+(a) Sin variation curve. (b) Twitter variation curve.
+
+V=10
+V=100
+V=1000
+
+50
+45
+40
+35
+30
+25
+20
+
+V=10
+V=100
+V=1000
+
+Cost
+
+Latency
+
+250
+225
+200
+175
+150
+125
+100
+75
+
+0 50 100 150 200 250 300
+Timeslot
+
+(a)
+
+0
+
+50 100 150 200 250 300
+Timeslot
+
+(b)
+
+Fig. 10. Impact of V-parameters on request latency and cost. (a) Impact of
+V-parameters on request latency. (b) Impact of V-parameters on cost.
+
+the average budget C̃, thereby avoiding large deviations. This
+mechanism allows the system to minimize request latency
+while maintaining cost control. In this experiment, C̃ is set to
+35. Since C̃ is an adjustable parameter, it can be dynamically
+tuned based on cost requirements, thus demonstrating the high
+adaptability of our algorithm.
+The V parameter in Lyapunov optimization plays a crucial
+role in balancing system cost and user request latency. To
+analyze the sensitivity of performance to changes in V , we
+conduct experiments under the Twitter load variation curve.
+As shown in Fig. 10, increasing the V value causes request
+latency to weigh more heavily in the reward function. Consequently, user request latency decreases, but the associated cost
+increases. Notably, when V = 1000, the cost begins to drop
+
+rapidly near the end of the time slot. This phenomenon occurs
+because the Lyapunov virtual queue Q(t), which accumulates
+based on the cost function c(t), grows large enough that
+its product with c(t) becomes comparable in magnitude to
+the latency component. Therefore, when V is excessively
+large, the cost experiences significant time-slot fluctuations,
+potentially leading to system instability.
+VI. CONCLUSIONS
+In this paper, we address the problem of dynamically
+changing user requests in edge server clusters and first model
+the problem using queuing theory. We proposed a three
+steps AutoLFD algorithm to solve the problem. Extensive
+simulation experiments demonstrate that our methods significantly improves user request latency, system operation cost,
+and other performance metrics compared to current state-ofthe-art methods. The proposed approach ensures maximum
+improvement in user service quality while keeping system
+operation costs below the predefined budget. This work provides a valuable reference for solving microservice scheduling
+problems in both edge and cloud computing environments.
+With the rapid advancement of reinforcement learning, its
+suitability for dynamically changing environments makes it
+particularly well suited for scenarios involving fluctuating user
+requests. This paper represents an initial attempt to apply
+reinforcement learning to microservice auto-scaling. Future
+research can further explore more effective designs of the
+reward function and action space. Additionally, while this
+study adopts a single-agent framework, employing a multiagent approach in future work may introduce higher resource
+consumption but holds promise for achieving better overall
+performance.
+R EFERENCES
+[1] S. Jhingran, N. Bansal, R. Chaturvedi, A. Singh, and Y. Arora, “Decentralized generative ai model deployment using microservices,” in
+2024 International Conference on Artificial Intelligence and Quantum
+Computation-Based Sensor Application (ICAIQSA). IEEE, 2024, pp.
+1–5.
+[2] K. Peng, Y. Hu, H. Ding, H. Chen, L. Wang, C. Cai, and M. Hu, “Largescale service mesh orchestration with probabilistic routing in cloud data
+centers,” IEEE Transactions on Services Computing, 2025.
+[3] Q. Luo, S. Hu, C. Li, G. Li, and W. Shi, “Resource scheduling in
+edge computing: A survey,” IEEE communications surveys & tutorials,
+vol. 23, no. 4, pp. 2131–2165, 2021.
+[4] X. Kong, Y. Wu, H. Wang, and F. Xia, “Edge computing for internet of
+everything: A survey,” IEEE Internet of Things Journal, vol. 9, no. 23,
+pp. 23 472–23 485, 2022.
+[5] P. Hou, H. Jia, H. Zhu, Z. Lu, S.-C. Huang, Y. Yang, and H. Chai,
+“Efficient edge server activation and service association for green
+computing in mec-enabled internet of vehicles,” IEEE Transactions on
+Intelligent Vehicles, 2024.
+[6] F. Gou and J. Wu, “Optimization of edge server group collaboration
+architecture strategy in iot smart cities application,” Peer-to-Peer Networking and Applications, vol. 17, no. 5, pp. 3110–3132, 2024.
+[7] V. Velepucha and P. Flores, “A survey on microservices architecture:
+Principles, patterns and migration challenges,” IEEE access, vol. 11,
+pp. 88 339–88 358, 2023.
+[8] L. De Lauretis, “From monolithic architecture to microservices architecture,” in 2019 IEEE International Symposium on Software Reliability
+Engineering Workshops (ISSREW). IEEE, 2019, pp. 93–96.
+[9] Y. Abgaz, A. McCarren, P. Elger, D. Solan, N. Lapuz, M. Bivol,
+G. Jackson, M. Yilmaz, J. Buckley, and P. Clarke, “Decomposition
+of monolith applications into microservices architectures: A systematic
+review,” IEEE Transactions on Software Engineering, vol. 49, no. 8, pp.
+4213–4242, 2023.
+
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+
+[10] M. Söylemez, B. Tekinerdogan, and A. Kolukısa Tarhan, “Challenges
+and solution directions of microservice architectures: A systematic
+literature review,” Applied sciences, vol. 12, no. 11, p. 5507, 2022.
+[11] M. D. Hossain, T. Sultana, S. Akhter, M. I. Hossain, N. T. Thu, L. N.
+Huynh, G.-W. Lee, and E.-N. Huh, “The role of microservice approach
+in edge computing: Opportunities, challenges, and research directions,”
+ICT Express, vol. 9, no. 6, pp. 1162–1182, 2023.
+[12] W. Lv, Q. Wang, P. Yang, Y. Ding, B. Yi, Z. Wang, and C. Lin,
+“Microservice deployment in edge computing based on deep q learning,”
+IEEE Transactions on Parallel and Distributed Systems, vol. 33, no. 11,
+pp. 2968–2978, 2022.
+[13] J. Lu, W. Li, J. Guo, X. Ding, Z. Tang, and T. Wang, “Container scheduling with dynamic computing resource for microservice deployment in
+edge computing,” in 2024 20th International Conference on Mobility,
+Sensing and Networking (MSN). IEEE Computer Society, 2024, pp.
+236–243.
+[14] T. Pusztai, S. Nastic, A. Morichetta, V. C. Pujol, P. Raith, S. Dustdar,
+D. Vij, Y. Xiong, and Z. Zhang, “Polaris scheduler: Slo-and topologyaware microservices scheduling at the edge,” in 2022 IEEE/ACM 15th
+International Conference on Utility and Cloud Computing (UCC).
+IEEE, 2022, pp. 61–70.
+[15] X. He, Z. Tu, M. Wagner, X. Xu, and Z. Wang, “Online deployment
+algorithms for microservice systems with complex dependencies,” IEEE
+Transactions on Cloud Computing, vol. 11, no. 2, pp. 1746–1763, 2022.
+[16] Y. Wang, C. Zhao, S. Yang, X. Ren, L. Wang, P. Zhao, and X. Yang,
+“Mpcsm: Microservice placement for edge-cloud collaborative smart
+manufacturing,” IEEE Transactions on Industrial Informatics, vol. 17,
+no. 9, pp. 5898–5908, 2020.
+[17] C. Meng, S. Song, H. Tong, M. Pan, and Y. Yu, “Deepscaler: Holistic
+autoscaling for microservices based on spatiotemporal gnn with adaptive
+graph learning,” in 2023 38th IEEE/ACM International Conference on
+Automated Software Engineering (ASE). IEEE, 2023, pp. 53–65.
+[18] L. Wang, X. Liu, H. Ding, Y. Hu, K. Peng, and M. Hu, “Energydelay-aware joint microservice deployment and request routing with
+dvfs in edge: A reinforcement learning approach,” IEEE Transactions
+on Computers, 2025.
+[19] K. Peng, J. He, J. Guo, Y. Liu, J. He, W. Liu, and M. Hu, “Delayaware optimization of fine-grained microservice deployment and routing
+in edge via reinforcement learning,” IEEE Transactions on Network
+Science and Engineering, 2024.
+[20] R. Zeng and Y. Chen, “A novel automatic horizontal extension technology for multi-instance microservice system,” in 2024 International
+Conference on Networking and Network Applications (NaNA). IEEE,
+2024, pp. 282–286.
+[21] K. Cheng, S. Zhang, M. Liu, Y. Gu, L. Wei, H. Cheng, K. Liu, Y. Song,
+X. Shi, A. Zhu et al., “Geoscale: microservice autoscaling with cost
+budget in geo-distributed edge clouds,” IEEE Transactions on Parallel
+and Distributed Systems, vol. 35, no. 4, pp. 646–662, 2024.
+[22] H. Ahmad, C. Treude, M. Wagner, and C. Szabo, “Smart hpa: A
+resource-efficient horizontal pod auto-scaler for microservice architectures,” in 2024 IEEE 21st International Conference on Software
+Architecture (ICSA). IEEE, 2024, pp. 46–57.
+[23] G. R. Bitran and R. Morabito, “State-of-the-art survey: Open queueing
+networks: Optimization and performance evaluation models for discrete manufacturing systems,” Production and Operations Management,
+vol. 5, no. 2, pp. 163–193, 1996.
+[24] M. Neely, Stochastic network optimization with application to communication and queueing systems. Morgan & Claypool Publishers, 2010.
+[25] D. S. Johnson, “Near-optimal bin packing algorithms,” Ph.D. dissertation, Massachusetts Institute of Technology, 1973.
+[26] D. Wang, H. Shen, and H. Tian, “Resource configuration for crossserver deployment of application-oriented microservices in cloud-edge
+continuum with slo constraints,” in 2023 IEEE 29th International
+Conference on Parallel and Distributed Systems (ICPADS). IEEE, 2023,
+pp. 2655–2662.
+[27] L. Yang, J. Jia, H. Lin, and J. Cao, “Reliable dynamic service chain
+scheduling in 5g networks,” IEEE Transactions on Mobile Computing,
+vol. 22, no. 8, pp. 4898–4911, 2022.
+[28] X. Li, J. Zhou, X. Wei, D. Li, Z. Qian, J. Wu, X. Qin, and S. Lu,
+“Topology-aware scheduling framework for microservice applications in
+cloud,” IEEE Transactions on Parallel and Distributed Systems, vol. 34,
+no. 5, pp. 1635–1649, 2023.
+[29] R. Liu, P. Yang, H. Lv, and W. Li, “Multi-objective multi-factorial
+evolutionary algorithm for container placement,” IEEE Transactions on
+Cloud Computing, vol. 11, no. 2, pp. 1430–1445, 2021.
+[30] W. Lv, P. Yang, T. Zheng, C. Lin, Z. Wang, M. Deng, and Q. Wang,
+“Graph-reinforcement-learning-based dependency-aware microservice
+
+12
+
+deployment in edge computing,” IEEE Internet of Things Journal,
+vol. 11, no. 1, pp. 1604–1615, 2023.
+[31] R. Bhattacharya and T. Wood, “Bloc: Balancing load with overload
+control in the microservices architecture,” in 2022 IEEE International
+Conference on Autonomic Computing and Self-Organizing Systems (ACSOS). IEEE, 2022, pp. 91–100.
+[32] D. Bachar, A. Bremler-Barr, and D. Hay, “Optimizing service selection
+and load balancing in multi-cluster microservice systems with mcoss,”
+in 2023 IFIP Networking Conference (IFIP Networking). IEEE, 2023,
+pp. 1–9.
+[33] S. Wang, Y. Guo, X. Liu, and A. Zhou, “Service routing in multi-tier
+edge computing: A matching game approach,” IEEE Journal on Selected
+Areas in Communications, vol. 41, no. 3, pp. 835–844, 2022.
+[34] H. Zhao, S. Deng, Z. Liu, J. Yin, and S. Dustdar, “Distributed redundant placement for microservice-based applications at the edge,” IEEE
+Transactions on Services Computing, vol. 15, no. 3, pp. 1732–1745,
+2020.
+[35] Y. Ren, S. Shen, Y. Ju, X. Wang, W. Wang, and V. C. Leung,
+“Edgematrix: A resources redefined edge-cloud system for prioritized
+services,” in IEEE INFOCOM 2022-IEEE Conference on Computer
+Communications. IEEE, 2022, pp. 610–619.
+[36] Y. Mao, X. Shang, and Y. Yang, “Provably efficient algorithms for trafficsensitive sfc placement and flow routing,” in IEEE INFOCOM 2022IEEE Conference on Computer Communications. IEEE, 2022, pp. 950–
+959.
+[37] Y. Hu, H. Wang, L. Wang, M. Hu, K. Peng, and B. Veeravalli,
+“Joint deployment and request routing for microservice call graphs in
+data centers,” IEEE Transactions on Parallel and Distributed Systems,
+vol. 34, no. 11, pp. 2994–3011, 2023.
+[38] K. Peng, L. Wang, J. He, C. Cai, and M. Hu, “Joint optimization of
+service deployment and request routing for microservices in mobile edge
+computing,” IEEE Transactions on Services Computing, vol. 17, no. 3,
+pp. 1016–1028, 2024.
+[39] J. Zeng, D. Ding, K. Kang, H. Xie, and Q. Yin, “Adaptive drl-based
+virtual machine consolidation in energy-efficient cloud data center,”
+IEEE Transactions on Parallel and Distributed Systems, vol. 33, no. 11,
+pp. 2991–3002, 2022.
+[40] Y. Liu, B. Yang, X. Ren, Q. Liu, S. Liu, and X. Guan, “E 2 ms:
+An efficient and economical microservice migration strategy for smart
+manufacturing,” IEEE Transactions on Services Computing, 2024.
+[41] S. Kardani-Moghaddam, R. Buyya, and K. Ramamohanarao, “Adrl:
+A hybrid anomaly-aware deep reinforcement learning-based resource
+scaling in clouds,” IEEE Transactions on Parallel and Distributed
+Systems, vol. 32, no. 3, pp. 514–526, 2020.
+[42] F. Rossi, V. Cardellini, F. L. Presti, and M. Nardelli, “Dynamic multimetric thresholds for scaling applications using reinforcement learning,”
+IEEE Transactions on Cloud Computing, vol. 11, no. 2, pp. 1807–1821,
+2022.
+[43] K. Cheng, S. Zhang, C. Tu, X. Shi, Z. Yin, S. Lu, Y. Liang, and
+Q. Gu, “Proscale: Proactive autoscaling for microservice with timevarying workload at the edge,” IEEE Transactions on Parallel and
+Distributed Systems, vol. 34, no. 4, pp. 1294–1312, 2023.
+[44] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347,
+2017.
+[45] Y. Gan, Y. Zhang, D. Cheng, A. Shetty, P. Rathi, N. Katarki, A. Bruno,
+J. Hu, B. Ritchken, B. Jackson et al., “An open-source benchmark suite
+for microservices and their hardware-software implications for cloud
+& edge systems,” in Proceedings of the Twenty-Fourth International
+Conference on Architectural Support for Programming Languages and
+Operating Systems, 2019, pp. 3–18.
+[46] L. Ju, P. Singh, and S. Toor, “Proactive autoscaling for edge computing
+systems with kubernetes,” in Proceedings of the 14th IEEE/ACM International Conference on Utility and Cloud Computing Companion, 2021,
+pp. 1–8.
+[47] A. Heimerson, J. Eker, and K.-E. Årzén, “A proactive cloud application
+auto-scaler using reinforcement learning,” in 2022 IEEE/ACM 15th International Conference on Utility and Cloud Computing (UCC). IEEE,
+2022, pp. 213–220.
+
+
