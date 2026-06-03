@@ -21,12 +21,19 @@ import os, sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
+
+for _i in range(1, len(sys.argv)):
+    if sys.argv[_i] == "--config" and _i + 1 < len(sys.argv):
+        os.environ["AUTOSCALING_CONFIG"] = sys.argv[_i + 1]
+        sys.argv.pop(_i); sys.argv.pop(_i)
+        break
+
 from env import environment
 from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
 
 
 CONFIG = environment.CONFIG
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 @dataclass
 class Args:
