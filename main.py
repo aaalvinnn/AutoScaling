@@ -1,4 +1,12 @@
+import sys, os
+for _i in range(1, len(sys.argv)):
+    if sys.argv[_i] == "--config" and _i + 1 < len(sys.argv):
+        os.environ["AUTOSCALING_CONFIG"] = sys.argv[_i + 1]
+        sys.argv.pop(_i); sys.argv.pop(_i)
+        break
+
 from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
+from env.configs import config_alibaba_largescale
 from env import environment, loghelper
 from methods import NoScaling, RandomScaling, GDCScaling, PPO_dnn, ProScaling, SAC, HPA
 from methods import Predicter
@@ -81,28 +89,33 @@ class TestHelper(object):
 
 
 LGDRL_MODEL_PATH = {
-    "sin_smallscale": "trained_models/sin_smallscale/0202/1159/PPO_dnn",
-    "sin_middlescale": "trained_models/sin_middlescale/0202/0758_best/PPO_dnn",
-    # "sin_largescale": "trained_models/sin_largescale/0205/1249/PPO_dnn",
-    # "sin_largescale": "model/sin_largescale/0428/1936_V=10_1/PPO_dnn",
-    "sin_largescale": "model/sin_largescale/0531/1359/PPO_dnn",
-    "twitter_smallscale": "trained_models/twitter_smallscale/0205/2232/PPO_dnn",
-    "twitter_middlescale": "trained_models/twitter_middlescale/0202/1555/PPO_dnn",
-    # "twitter_largescale": "trained_models/twitter_largescale/0203/2143_best/PPO_dnn",
-    # "twitter_largescale": "trained_models/twitter_largescale/0412_V0_3"
-    # "twitter_largescale": "params_exp/V/N_change=3/10/1",
-    "twitter_largescale": "model/twitter_largescale/0530/1829/PPO_dnn"
+    "sin_smallscale": "trained_models/sin_smallscale/0202/1159/PPO_dnn/model_dnn_best.pth",
+    "sin_middlescale": "trained_models/sin_middlescale/0202/0758_best/PPO_dnn/model_dnn_best.pth",
+    "sin_largescale": "model/sin_largescale/0531/1359/PPO_dnn/model_dnn_best.pth",
+    "twitter_smallscale": "trained_models/twitter_smallscale/0205/2232/PPO_dnn/model_dnn_best.pth",
+    "twitter_middlescale": "trained_models/twitter_middlescale/0202/1555/PPO_dnn/model_dnn_best.pth",
+    "twitter_largescale": "model/twitter_largescale/0530/1829/PPO_dnn/model_dnn_best.pth",
+    "alibaba_largescale": "model/alibaba_largescale/0602/1440/PPO_dnn/model_dnn_best.pth"
 }
 
 RLAGENT_MODEL_PATH = {
     "sin_smallscale": "trained_models/sin_smallscale/0314/0953_best/SAC",
     "sin_middlescale": "trained_models/sin_middlescale/0312/1307_best/SAC",
-    # "sin_largescale": "trained_models/sin_largescale/0314/1637/SAC",
     "sin_largescale": "model/sin_largescale/0529/2158/SAC",
     "twitter_smallscale": "trained_models/twitter_smallscale/0312/1308_best/SAC",
     "twitter_middlescale": "trained_models/twitter_middlescale/0315/1644/SAC",
-    # "twitter_largescale": "trained_models/twitter_largescale/0313/1046/SAC"
-    "twitter_largescale": "model/twitter_largescale/0603/1507/SAC"
+    "twitter_largescale": "model/twitter_largescale/0603/1507/SAC",
+    "alibaba_largescale": "model/alibaba_largescale/0602/1446/SAC"
+}
+
+DEEPSCALER_MODEL_PATH = {
+    "sin_smallscale": "",
+    "sin_middlescale": "",
+    "sin_largescale": "",
+    "twitter_smallscale": "",
+    "twitter_middlescale": "",
+    "twitter_largescale": "",
+    "alibaba_largescale": ""
 }
 
 if __name__ == '__main__':
@@ -163,12 +176,19 @@ if __name__ == '__main__':
     #           ppoAgent3]
     # logger = loghelper.LogHelper(["delta=1", "delta=2", "delta=3"], envs)
 
-    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(1)]
-    ppoAgent1 = PPO_dnn.PPOAgent(config=env_config)
-    ppoAgent1.load("model/twitter_largescale/0530/1829/PPO_dnn/model_dnn.pth")
-    agents = [ppoAgent1]
-    logger = loghelper.LogHelper(["V=10"], envs)
+    # ===== Alibaba baseline 对比测试 =====
+    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(6)]
+    ppoLGDRL = PPO_dnn.PPOAgent(config=env_config)
+    ppoLGDRL.load(LGDRL_MODEL_PATH[env_config.config_name])
+    sacRL = SAC.SACAgent(config=env_config)
+    sacRL.load(RLAGENT_MODEL_PATH[env_config.config_name])
+    agents = [NoScaling.NoScalingAgent(envs[0]),
+              RandomScaling.RandomScalingAgent(envs[1]),
+              HPA.HPA(envs[2]),
+              ProScaling.ProScalingAgent(envs[3]),
+              sacRL,
+              ppoLGDRL]
+    logger = loghelper.LogHelper(["NoScaling", "Random", "HPA", "Proscale", "RL Agent", "LGDRL"], envs)
 
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()
-    # test_helper.smooth_test(running_times=3)
