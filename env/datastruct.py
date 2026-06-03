@@ -1,11 +1,33 @@
+import os
 import numpy as np
 import random
 from configs import config_sin_smallscale, config_sin_middlescale, config_sin_largescale
 from env.configs import config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
+from env.configs import config_alibaba_largescale
 
 
-# config = EnvConfig()
-CONFIG = config_twitter_largescale.EnvConfig()
+CONFIG_REGISTRY = {
+    "sin_smallscale": config_sin_smallscale.EnvConfig,
+    "sin_middlescale": config_sin_middlescale.EnvConfig,
+    "sin_largescale": config_sin_largescale.EnvConfig,
+    "twitter_smallscale": config_twitter_smallscale.EnvConfig,
+    "twitter_middlescale": config_twitter_middlescale.EnvConfig,
+    "twitter_largescale": config_twitter_largescale.EnvConfig,
+    "alibaba_largescale": config_alibaba_largescale.EnvConfig,
+}
+
+
+def _resolve_config():
+    """从环境变量 AUTOSCALING_CONFIG 读取配置名，默认 alibaba_largescale。"""
+    name = os.environ.get("AUTOSCALING_CONFIG", "alibaba_largescale")
+    if name not in CONFIG_REGISTRY:
+        raise ValueError(
+            f"Unknown config '{name}'. Available: {sorted(CONFIG_REGISTRY.keys())}"
+        )
+    return CONFIG_REGISTRY[name]()
+
+
+CONFIG = _resolve_config()
 
 #  ------------------------------------- TimeSlot -------------------------------------  #
 class TimeSlot(object):
