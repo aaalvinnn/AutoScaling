@@ -86,3 +86,8 @@ class EnvConfig:
         self.y_weight = 0.2
         self.y_weight_train = 0.1
         self.reward_shaping_record_epoch = 100
+
+        # Ablation flags
+        self.ablation_no_lyapunov = False
+        self.ablation_no_history = False
+        self.ablation_no_ffd = False

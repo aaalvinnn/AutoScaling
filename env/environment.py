@@ -24,6 +24,11 @@ class DataCenterEnvironment(gym.Env):
         self.config = env_config
         self.is_train = is_train
         self.agent_type = agent_type
+        # Ablation flags (default False, set True in ablation config)
+        self.ablation_no_lyapunov = getattr(env_config, 'ablation_no_lyapunov', False)
+        self.ablation_no_lyapunov_strict = getattr(env_config, 'ablation_no_lyapunov_strict', False)
+        self.ablation_no_history = getattr(env_config, 'ablation_no_history', False)
+        self.ablation_no_ffd = getattr(env_config, 'ablation_no_ffd', False)
         self.timeslot = TimeSlot(self.config.time_slot_start, self.config.time_slot_end)
         self.ms_nums = self.config.ms_nums
         self.ms_image_list = env_config.init_ms_image_list
@@ -49,7 +54,7 @@ class DataCenterEnvironment(gym.Env):
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(7, self.ms_nums, self.server_node_nums), dtype=np.float32)
         if self.config.is_las:
             self.action_space = gym.spaces.Discrete(self.server_node_nums * self.ms_nums * (self.max_instance_update_num * 2 + 1))
-        elif self.agent_type == "PPO":
+        elif self.agent_type in ("PPO", "DeepScaler"):
             self.action_space = gym.spaces.Tuple((
                 gym.spaces.Discrete(self.server_node_nums),
                 gym.spaces.Discrete(self.ms_nums),
@@ -103,14 +108,29 @@ class DataCenterEnvironment(gym.Env):
             self.state["predicted_lamda"][ms_idx] = self.config.estimated_max_lamda / 2
 
     def _init_deploy(self):
-        """ 第一次部署 """
-        # 这里假定已知最初的到达率，以确定一个合理的实例数量
         for i in range(len(self.ms_image_list)):
             ms = self.MS_list[i]
-            self.ms_image_list[i] = math.ceil(ms.lamda / ms.mu * 1.2)     # 向上取整
+            self.ms_image_list[i] = math.ceil(ms.lamda / ms.mu * 1.2)
 
-        init_deploy_strategy = FFD.FFD(self.MS_list, self.ms_image_list, self.Node_list, self.state)
-        self.state, self.Node_list = init_deploy_strategy.deploy()
+        if self.ablation_no_ffd:
+            node_indices = list(range(self.server_node_nums))
+            for ms in self.MS_list:
+                remaining = self.ms_image_list[ms.id]
+                random.shuffle(node_indices)
+                for ni in node_indices:
+                    if remaining <= 0:
+                        break
+                    node = self.Node_list[ni]
+                    fit = int(min(node.cpu // ms.cpu, node.memory // ms.memory, remaining))
+                    if fit > 0:
+                        self.state["deploy_info"][ms.id][ni] += fit
+                        self.state["cpus"][ni] -= ms.cpu * fit
+                        self.state["memories"][ni] -= ms.memory * fit
+                        node.delpoy(ms, fit)
+                        remaining -= fit
+        else:
+            init_deploy_strategy = FFD.FFD(self.MS_list, self.ms_image_list, self.Node_list, self.state)
+            self.state, self.Node_list = init_deploy_strategy.deploy()
         
         return self.ms_image_list
 
@@ -119,19 +139,17 @@ class DataCenterEnvironment(gym.Env):
         return copy.deepcopy(self.state)
     
     def get_observation(self):
-        """ 返回状态副本的元组 """
         res = np.zeros((7, self.ms_nums, self.server_node_nums))
         res[0] = self.state["deploy_info"]
         res[1] = self.state["cpus"]
         res[2] = self.state["memories"]
-        res[3][:,0] = self.state["predicted_lamda"]
-        # 用两个矩阵来储存历史的到达率
-        for i in range(len(self.state["history_lamda"])):
-            if i < self.server_node_nums:
-                res[4][:,i] = self.state["history_lamda"][i]
-            else:
-                res[5][:,i-self.server_node_nums] = self.state["history_lamda"][i]
-        # 储存当前step，转化为one-hot编码
+        if not self.ablation_no_history:
+            res[3][:,0] = self.state["predicted_lamda"]
+            for i in range(len(self.state["history_lamda"])):
+                if i < self.server_node_nums:
+                    res[4][:,i] = self.state["history_lamda"][i]
+                else:
+                    res[5][:,i-self.server_node_nums] = self.state["history_lamda"][i]
         now_step_one_hot = math.floor((self.timeslot.get_now() - self.timeslot.start)* self.config.history_step_length/self.timeslot.get_slot_length() )
         res[6][now_step_one_hot//res.shape[2],now_step_one_hot%res.shape[1]] = 1
 
@@ -601,11 +619,17 @@ class DataCenterEnvironment(gym.Env):
             y = self.config.y_weight*cost*Qt + np.mean(t_total_list)    # test use
         # reward = -y + penalty + 50*request_success_rate
         if self.agent_type == "PPO":
-            reward = -y
+            if self.ablation_no_lyapunov:
+                reward = -self.config.y_weight_train*cost + request_success_rate*20
+            elif self.ablation_no_lyapunov_strict:
+                y = self.config.y_weight_train*cost + np.mean(t_total_list)
+                reward = -y
+            else:
+                reward = -y
         elif self.agent_type == "SAC":
             reward = -self.config.y_weight_train*cost + request_success_rate*20
-            # reward = request_success_rate*10
-            # reward = -y
+        elif self.agent_type == "DeepScaler":
+            reward = -self.config.y_weight_train*cost + request_success_rate*20
         # print(reward)
 
         # # debug

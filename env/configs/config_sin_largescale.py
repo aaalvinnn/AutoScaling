@@ -87,3 +87,8 @@ class EnvConfig:
         # self.y_weight_train = (self.y_weight*25/self.C)     # 不同规模场景训练需要不同的权重（因为各自的开销阈值C不同），这里用中等规模场景的C做标准化
         self.y_weight_train = 0.1
         self.reward_shaping_record_epoch = 100
+
+        # Ablation flags
+        self.ablation_no_lyapunov = False
+        self.ablation_no_history = False
+        self.ablation_no_ffd = False

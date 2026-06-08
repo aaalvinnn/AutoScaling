@@ -77,7 +77,7 @@ class EnvConfig:
         self.batch_size = int(self.num_envs * self.num_steps)
         self.num_minibatches = 4
         self.minibatch_size = int(self.batch_size // self.num_minibatches)
-        self.total_epoches = 20000
+        self.total_epoches = 10000
         self.total_timesteps = self.total_epoches * self.num_steps * self.num_envs
         self.num_iterations = self.total_timesteps // self.batch_size
 
@@ -87,3 +87,8 @@ class EnvConfig:
         self.y_weight_train = 0.1
         self.reward_shaping_record_epoch = 100
         self.V = 100
+
+        # Ablation flags
+        self.ablation_no_lyapunov = False
+        self.ablation_no_history = False
+        self.ablation_no_ffd = False
