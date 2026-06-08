@@ -656,9 +656,9 @@ class DataCenterEnvironment(gym.Env):
         # extra info
         info = {
             "y": y,
-            "t_all": np.sum(t_total_list),
-            "t_exe": np.sum(t_exe_list),
-            "t_route": np.sum(t_route_list),
+            "t_all": np.mean(t_total_list),
+            "t_exe": np.mean(t_exe_list),
+            "t_route": np.mean(t_route_list),
             "vload": vload,
             "ns": ns,
             "cost": cost,
