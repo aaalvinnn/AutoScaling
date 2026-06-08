@@ -37,18 +37,19 @@ else:
     data_path = twitter_paths
 
 scale = "Large Scale"
-colors = ["#449945", "#f8c91c", "#376eae", "#c22f2f"]
+colors = ["#449945", "#f8c91c", "#376eae", "#c22f2f", "#8E6EC8"]
+linestyles = ['--', '--', '--', '--', '-.']
 
 def draw_latency():
-    datas = {'RL Agent': None, 'Proscale': None, 'HPA': None, 'LGDRL': None}
-    strs = ['RL Agent', 'Proscale', 'PPA', 'Ours']
+    datas = {'RL Agent': None, 'Proscale': None, 'HPA': None, 'DeepScaler': None, 'LGDRL': None}
+    strs = ['RL Agent', 'Proscale', 'PPA', 'DeepScaler', 'Ours']
     for agent in datas:
         datas[agent] = np.load(os.path.join(data_path[scale], agent, "t_all.npy"))
 
     plt.figure(figsize=(14, 4))
     for i, agent in enumerate(datas):
         plt.plot(datas[agent], label=strs[i], color=colors[i], linewidth=line_width,
-                 zorder=line_zorder, linestyle='--', marker='o', markersize=markersize)
+                 zorder=line_zorder, linestyle=linestyles[i], marker='o', markersize=markersize)
 
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
@@ -60,14 +61,15 @@ def draw_latency():
     plt.savefig(os.path.join(current_dir, f"Latency-{dataset}-{scale}.pdf"), format="pdf")
 
 def draw_cost():
-    datas = {'RL Agent': None, 'Proscale': None, 'HPA': None, 'LGDRL': None}
-    strs = ['RL Agent', 'Proscale', 'PPA', 'Ours']
+    datas = {'RL Agent': None, 'Proscale': None, 'HPA': None, 'DeepScaler': None, 'LGDRL': None}
+    strs = ['RL Agent', 'Proscale', 'PPA', 'DeepScaler', 'Ours']
     for agent in datas:
         datas[agent] = np.load(os.path.join(data_path[scale], agent, "cost.npy"))
 
     plt.figure(figsize=(7, 5))
     for i, agent in enumerate(datas):
-        plt.plot(datas[agent], label=strs[i], color=colors[i], linewidth=line_width, zorder=line_zorder)
+        plt.plot(datas[agent], label=strs[i], color=colors[i], linewidth=line_width, zorder=line_zorder,
+                 linestyle=linestyles[i])
 
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)

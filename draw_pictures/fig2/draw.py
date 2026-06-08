@@ -10,8 +10,8 @@ bar_width = 0.12
 bar_zorder = 3
 
 # DATASET = "sin"
-# DATASET = "twitter"
 DATASET = "alibaba"
+# DATASET = "alibaba"
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(current_dir))
@@ -28,20 +28,20 @@ alibaba_paths = {
 
 if DATASET == "sin":
     DATA_PATH = sin_paths
-    agents_all = ["RL Agent", "Proscale", "HPA", "LGDRL"]
-    labels_all = ["RL Agent", "Proscale", "PPA", "Ours"]
+    agents_all = ["RL Agent", "Proscale", "HPA", "DeepScaler", "LGDRL"]
+    labels_all = ["RL Agent", "Proscale", "PPA", "DeepScaler", "Ours"]
 elif DATASET == "alibaba":
     DATA_PATH = alibaba_paths
-    agents_all = ["HPA", "Proscale", "RL Agent", "LGDRL"]
-    labels_all = ["PPA", "Proscale", "RL Agent", "Ours"]
+    agents_all = ["HPA", "Proscale", "RL Agent", "DeepScaler", "LGDRL"]
+    labels_all = ["PPA", "Proscale", "RL Agent", "DeepScaler", "Ours"]
 else:
     DATA_PATH = twitter_paths
-    agents_all = ["RL Agent", "Proscale", "HPA", "LGDRL"]
-    labels_all = ["RL Agent", "Proscale", "PPA", "Ours"]
+    agents_all = ["RL Agent", "Proscale", "HPA", "DeepScaler", "LGDRL"]
+    labels_all = ["RL Agent", "Proscale", "PPA", "DeepScaler", "Ours"]
 
 SCALE = "Large Scale"
 METRICS = {"Latency": "t_all.npy", "Cost": "cost.npy", "Success Rate": "request_success_rate.npy"}
-COLORS  = ["#8ECFC9", "#FFBE7A", "#82B0D2", "#FA7F6F"]
+COLORS  = ["#8ECFC9", "#FFBE7A", "#82B0D2", "#BEB8DC", "#FA7F6F"]
 
 def get_max(datas, idx):
     return max(datas[a][idx] for a in agents_all)
