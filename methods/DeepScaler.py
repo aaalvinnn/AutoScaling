@@ -8,8 +8,8 @@ Architecture overview:
     → DNN (MLP, configurable dnn_hidden × dnn_layers)
     → Actor heads (node, ms, delta) + Critic head
 
-Default parameters (hidden_dim=64, dnn_hidden=512, dnn_layers=6) give
-~1.72M params on twitter_largescale, matching LGDRL's ~1.71M parameter budget.
+Default parameters (hidden_dim=64, dnn_hidden=512, dnn_layers=3) give
+~1.16M params on twitter_largescale, close to LGDRL's ~0.66M parameter budget.
  
 No external GNN libraries required (pure PyTorch).
 """
@@ -278,18 +278,18 @@ class ActorCriticGNN(nn.Module):
     The DNN bridges the GNN output to the policy/value heads, matching the
     parameter budget of LGDRL's 7-layer MLP (≈1.7M params on largescale).
 
-    Defaults (hidden_dim=64, dnn_hidden=512, dnn_layers=6) give ≈1.72M params
-    on twitter_largescale, within 1% of LGDRL's ≈1.71M.
+    Defaults (hidden_dim=64, dnn_hidden=512, dnn_layers=3) give ≈1.16M params
+    on twitter_largescale, close to LGDRL's ≈0.66M parameter budget.
 
     Args:
         config:      EnvConfig dataclass with ms_nums, node_nums, device, etc.
         hidden_dim:  GNN encoder channel dimension (default 64).
         dnn_hidden:  DNN hidden layer width (default 512, matches LGDRL).
-        dnn_layers:  Total DNN Linear layers including input projection (default 6).
+        dnn_layers:  Total DNN Linear layers including input projection (default 3).
     """
 
     def __init__(self, config, hidden_dim: int = 64,
-                 dnn_hidden: int = 512, dnn_layers: int = 6):
+                 dnn_hidden: int = 512, dnn_layers: int = 3):
         super().__init__()
         self.config = config
         self.node_nums = config.node_nums
@@ -419,11 +419,11 @@ class DeepScalerAgent:
                        (the MS2MS_data_graph from the environment).
         hidden_dim:    GNN encoder channel dimension (default 64).
         dnn_hidden:    DNN hidden layer width (default 512).
-        dnn_layers:    Total DNN Linear layers (default 6).
+        dnn_layers:    Total DNN Linear layers (default 3).
     """
 
     def __init__(self, config, ms2ms_graph: np.ndarray = None,
-                 hidden_dim: int = 64, dnn_hidden: int = 512, dnn_layers: int = 6):
+                 hidden_dim: int = 64, dnn_hidden: int = 512, dnn_layers: int = 3):
         self.config = config
         self.actorcrtic = ActorCriticGNN(
             config, hidden_dim=hidden_dim, dnn_hidden=dnn_hidden, dnn_layers=dnn_layers
@@ -456,9 +456,12 @@ class DeepScalerAgent:
         """Load model state dict from checkpoint.
 
         Args:
-            path: Directory containing "model.pth".
+            path: Directory containing "model.pth", or direct path to a .pth file.
         """
-        load_path = os.path.join(path, "model.pth")
+        if path.endswith('.pth'):
+            load_path = path
+        else:
+            load_path = os.path.join(path, "model.pth")
         self.actorcrtic.load_state_dict(
             torch.load(load_path, map_location=self.config.device, weights_only=True)
         )
@@ -483,7 +486,7 @@ class DeepScalerAgent:
 
 def make_env(env_id, config):
     def thunk():
-        return environment.DataCenterEnvironment(env_id, config, True)
+        return environment.DataCenterEnvironment(env_id, config, True, agent_type="DeepScaler")
     return thunk
 
 
@@ -606,12 +609,12 @@ def train(config, agent: DeepScalerAgent):
                 total_delay.append(np.mean(infos['t_all']))
                 total_rsr.append(np.mean(infos['request_success_rate']))
 
-                if terminations[0]:
-                    writer.add_scalar("charts/reward", np.sum(total_reward), iteration)
-                    writer.add_scalar("charts/y", np.mean(total_y), iteration)
-                    writer.add_scalar("charts/cost", np.mean(total_cost), iteration)
-                    writer.add_scalar("charts/t_all", np.mean(total_delay), iteration)
-                    writer.add_scalar("charts/rsr", np.mean(total_rsr), iteration)
+            if total_y:
+                writer.add_scalar("charts/reward", np.sum(total_reward), iteration)
+                writer.add_scalar("charts/y", np.mean(total_y), iteration)
+                writer.add_scalar("charts/cost", np.mean(total_cost), iteration)
+                writer.add_scalar("charts/t_all", np.mean(total_delay), iteration)
+                writer.add_scalar("charts/rsr", np.mean(total_rsr), iteration)
 
             if iteration < reward_shaping_record_epoch:
                 continue
@@ -728,7 +731,7 @@ def parse_args():
     parser.add_argument("--q-max", type=int, help="Q_max parameter override")
     parser.add_argument("--hidden-dim", type=int, default=64, help="GNN encoder hidden channels")
     parser.add_argument("--dnn-hidden", type=int, default=512, help="DNN hidden layer width (default 512, matches LGDRL)")
-    parser.add_argument("--dnn-layers", type=int, default=6, help="Total DNN Linear layers (default 6, matches LGDRL depth)")
+    parser.add_argument("--dnn-layers", type=int, default=3, help="Total DNN Linear layers (default 3)")
     parser.add_argument("--device", help="CUDA device override")
     parser.add_argument("--seed", type=int, help="Random seed override")
     parser.add_argument("--resume", help="Resume from checkpoint")

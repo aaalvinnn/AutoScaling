@@ -8,7 +8,7 @@ for _i in range(1, len(sys.argv)):
 from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
 from env.configs import config_alibaba_largescale
 from env import environment, loghelper
-from methods import NoScaling, RandomScaling, GDCScaling, PPO_dnn, ProScaling, SAC, HPA
+from methods import NoScaling, RandomScaling, GDCScaling, PPO_dnn, ProScaling, SAC, HPA, DeepScaler
 from methods import Predicter
 import random
 import numpy as np
@@ -111,11 +111,11 @@ RLAGENT_MODEL_PATH = {
 DEEPSCALER_MODEL_PATH = {
     "sin_smallscale": "",
     "sin_middlescale": "",
-    "sin_largescale": "",
+    "sin_largescale": "model/sin_largescale/0607/1653/DeepScaler/model_best.pth",
     "twitter_smallscale": "",
     "twitter_middlescale": "",
-    "twitter_largescale": "",
-    "alibaba_largescale": ""
+    "twitter_largescale": "model/twitter_largescale/0607/1653/DeepScaler/model_best.pth",
+    "alibaba_largescale": "model/alibaba_largescale/0607/1653/DeepScaler/model_best.pth"
 }
 
 if __name__ == '__main__':
@@ -176,19 +176,24 @@ if __name__ == '__main__':
     #           ppoAgent3]
     # logger = loghelper.LogHelper(["delta=1", "delta=2", "delta=3"], envs)
 
-    # ===== Alibaba baseline 对比测试 =====
-    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(6)]
+    # ===== baseline 对比测试 =====
+    envs = [environment.DataCenterEnvironment(i, env_config) for i in range(7)]
     ppoLGDRL = PPO_dnn.PPOAgent(config=env_config)
     ppoLGDRL.load(LGDRL_MODEL_PATH[env_config.config_name])
     sacRL = SAC.SACAgent(config=env_config)
     sacRL.load(RLAGENT_MODEL_PATH[env_config.config_name])
+    temp_env = environment.DataCenterEnvironment(0, env_config, is_train=True)
+    temp_env.reset(seed=env_config.seed)
+    deepScalerAgent = DeepScaler.DeepScalerAgent(env_config, temp_env.MS2MS_data_graph)
+    deepScalerAgent.load(DEEPSCALER_MODEL_PATH[env_config.config_name])
     agents = [NoScaling.NoScalingAgent(envs[0]),
               RandomScaling.RandomScalingAgent(envs[1]),
               HPA.HPA(envs[2]),
               ProScaling.ProScalingAgent(envs[3]),
               sacRL,
-              ppoLGDRL]
-    logger = loghelper.LogHelper(["NoScaling", "Random", "HPA", "Proscale", "RL Agent", "LGDRL"], envs)
+              ppoLGDRL,
+              deepScalerAgent]
+    logger = loghelper.LogHelper(["NoScaling", "Random", "HPA", "Proscale", "RL Agent", "LGDRL", "DeepScaler"], envs)
 
     test_helper = TestHelper(envs, agents, logger)
     test_helper.test()
