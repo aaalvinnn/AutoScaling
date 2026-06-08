@@ -1,6 +1,7 @@
 # AutoLFD Major Revision 修订与实验计划
 
 > **截止日期**：2026-07-02
+> **最后更新**：2026-06-08
 > **目标**：把论文复现实验、Major Revision 新增实验、审稿意见回应整理成一份可执行 TODO。
 > **硬件**：2 x RTX 4080 16GB
 > **环境**：conda env `tcc`，Python 3.10，PyTorch 2.5.1，Gymnasium 1.0.0
@@ -9,17 +10,17 @@
 
 ## 0. 审稿意见与任务映射
 
-| 编号 | 审稿意见 | 优先级 | 对应任务/产出 |
-|------|----------|--------|---------------|
-| R1-1 | 扁平动作空间 `(server, microservice, change_amount)` 在大规模集群下可能不可扩展 | P1 | 大规模实验；动作空间复杂度分析 |
-| R1-2 | 需要说明 DRL 如何利用历史请求数据 `R_his` 做隐式预测 | P2 | 历史特征消融/可视化；论文解释 |
-| R1-3 | 需要消融实验量化 Lyapunov 优化贡献 | P0 | AutoLFD vs w/o Lyapunov |
-| R2-1 | 缺少 GNN/MARL 等前沿方法对比 | P1 | DeepScaler/GNN baseline |
-| R2-2 | 固定通信延迟 `T0` 过于简化 | P2 | 可变通信模型或敏感性分析 |
-| R2-3 | 预测机制未充分评估 | P0 | 消融实验「w/o Historical Data」（见 5.4），不再单设预测精度实验 |
-| R2-4 | 数据集单一，只有 synthetic + Twitter | P1 | Alibaba/Google trace 验证 |
-| R2-5 | 未讨论 MDRL 训练开销和收敛时间 | P0 | 训练/推理开销表 |
-| R2-6 | MFFD + MDRL 解耦可能导致次优 | P2 | 论文讨论；可选端到端/GNN 对比 |
+| 编号 | 审稿意见 | 优先级 | 对应任务/产出 | 当前状态 |
+|------|----------|--------|---------------|----------|
+| R1-1 | 扁平动作空间 `(server, microservice, change_amount)` 在大规模集群下可能不可扩展 | P1 | 大规模实验；动作空间复杂度分析 | ❌ 未开始 |
+| R1-2 | 需要说明 DRL 如何利用历史请求数据 `R_his` 做隐式预测 | P2 | 消融「w/o Historical Data」已量化 + 文字解释 | ✅ 消融完成（alibaba），📝 文字未写 |
+| R1-3 | 需要消融实验量化 Lyapunov 优化贡献 | P0 | AutoLFD vs w/o Lyapunov | ✅ 消融完成（alibaba），审稿未要求多数据集 |
+| R2-1 | 缺少 GNN/MARL 等前沿方法对比 | P1 | DeepScaler/GNN baseline | ✅ 训练完成，🔄 需性能对比图 |
+| R2-2 | 固定通信延迟 `T0` 过于简化 | P2 | 可变通信模型或敏感性分析 | ❌ 未开始 |
+| R2-3 | 预测机制未充分评估 | P0 | 消融实验「w/o Historical Data」 | ✅ 同 R1-2 |
+| R2-4 | 数据集单一，只有 synthetic + Twitter | P1 | Alibaba trace 验证 | ✅ 训练+测试+图表完成 |
+| R2-5 | 未讨论 MDRL 训练开销和收敛时间 | P0 | 训练/推理开销表 | ❌ 未开始（需加计时代码） |
+| R2-6 | MFFD + MDRL 解耦可能导致次优 | P2 | 论文讨论；消融 w/o FFD 已量化 | ✅ 消融完成（alibaba），📝 文字未写 |
 
 优先级说明：
 
@@ -40,7 +41,7 @@
 - ✅ HPA.py, ProScaling.py, GDCScaling.py — 传统 autoscaling baseline
 - ✅ NoScaling.py, RandomScaling.py — 消融参考 baseline
 - ✅ Predicter.py — 到达率预测模块
-- ✅ DeepScaler.py — GNN baseline 代码骨架（**未训练**）
+- ✅ DeepScaler.py — GNN baseline（**已训练**）
 
 **环境** (`env/`)：
 - ✅ `environment.py` — Gymnasium env，含 M/M/c 排队模型、Lyapunov 优化、通信延迟
@@ -50,6 +51,7 @@
 - ✅ `config_twitter_{small, middle, large}scale.py`（3 个）
 - ✅ `config_sin_{small, middle, large}scale.py`（3 个）
 - ✅ `config_twitter_largescale_requests15.py`（requests=15 变体）
+- ✅ `config_alibaba_largescale.py`
 
 **数据** (`data/`)：
 - ✅ `loads-sin.txt` — 正弦负载 + 随机扰动
@@ -72,6 +74,8 @@
 | `sin_largescale` | `model/sin_largescale/0529/2157/PPO_dnn/` | ✅ 20000ep 完成，含 best checkpoint |
 | `sin_largescale` | `model/sin_largescale/0529/2145/PPO_dnn/` | ✅ 20000ep 完成（第二次运行） |
 | `sin_largescale` | `model/sin_largescale/0531/1359/PPO_dnn/` | ✅ 20000ep 完成（第三次运行） |
+| `alibaba_largescale` | `model/alibaba_largescale/0602/1440/PPO_dnn/` | ✅ 20000ep 完成，含 best checkpoint |
+| `alibaba_largescale` | `model/alibaba_largescale/0602/1427/PPO_dnn/` | ✅ 另一次运行 |
 | `twitter_largescale` (V=2) | `model/twitter_largescale/0605/V=2/PPO_dnn/` | ✅ 20000ep 完成 |
 | `twitter_largescale` (V=1000) | `model/twitter_largescale/0605/V=1000/PPO_dnn/` | ✅ 20000ep 完成 |
 | `twitter_largescale` (V=0.3) | `trained_models/twitter_largescale/0412_V0_3/` | ✅ 20000ep 完成 |
@@ -87,9 +91,54 @@
 |------|------|------|
 | `twitter_largescale` | `model/twitter_largescale/*/SAC/`（0531-0603 共 8 次运行） | ✅ 多次训练完成 |
 | `sin_largescale` | `model/sin_largescale/0529/2158/SAC/`, `0529/2146/SAC/` | ✅ 完成 |
+| `alibaba_largescale` | `model/alibaba_largescale/0602/1429/SAC/`, `0602/1446/SAC/` | ✅ 完成（2 次） |
 | `sin_largescale` | `trained_models/sin_largescale/0314/1637/SAC/` | ✅ 历史版本 |
 | `twitter_largescale` | `trained_models/twitter_largescale/0313/1046/SAC/` | ✅ 历史版本 |
 | `twitter_smallscale` | `model/twitter_smallscale/*/SAC/`（0304-0311 共 8 次运行） | ✅ 多次训练完成 |
+
+#### DeepScaler (GNN) — GNN baseline
+
+| 配置 | 目录 | 状态 | 备注 |
+|------|------|------|------|
+| `alibaba_largescale` | `model/alibaba_largescale/0604/2126/DeepScaler/` | ✅ 训练完成 | 旧版 6 层 DNN (1.72M params) |
+| `alibaba_largescale` | `model/alibaba_largescale/0605/1412/DeepScaler/` | ✅ 训练完成 | 旧版 6 层 DNN (1.72M params) |
+| `alibaba_largescale` | `model/alibaba_largescale/0606/1702/DeepScaler/` | ✅ 训练完成 | 2 层 DNN (0.67M params)，加权求和 reward，RSR 仅 0.58 |
+| `sin_largescale` | `model/sin_largescale/0607/1653/DeepScaler/` | ✅ 训练完成 | 3 层 DNN (1.16M params)，加权求和 reward |
+| `twitter_largescale` | `model/twitter_largescale/0607/1653/DeepScaler/` | ✅ 训练完成 | 3 层 DNN (1.16M params)，加权求和 reward |
+| `alibaba_largescale` | `model/alibaba_largescale/0607/1653/DeepScaler/` | ✅ 训练完成 | 3 层 DNN (1.16M params)，加权求和 reward |
+
+##### DeepScaler v0607/1653 详细测试结果（3 层 DNN, 加权求和 reward, dnn_hidden=512）
+
+**total_reward：**
+
+| Agent | sin | twitter | alibaba |
+|---|---|---|---|
+| LGDRL | -2683.95 | -2412.38 | -2389.37 |
+| DeepScaler | -2792.39 | -4662.20 | -3862.42 |
+
+**fig2 逐指标：**
+
+| 数据集 | Agent | Latency | Cost | RSR |
+|---|---|---|---|---|
+| sin | DeepScaler | 9.70 | **30.28** | **0.999** |
+| sin | LGDRL | **9.32** | 34.22 | 0.966 |
+| twitter | DeepScaler | 8.93 | **25.73** | **0.999** |
+| twitter | LGDRL | **8.38** | 31.03 | 0.959 |
+| alibaba | DeepScaler | 13.41 | 38.55 | 0.576 |
+| alibaba | LGDRL | **8.30** | **36.50** | **0.958** |
+
+**问题：** sin/twitter 上 DeepScaler 的 Cost 和 RSR 反优于 LGDRL（Cost 低、RSR 高），原因是加权求和 reward 不含 Qt 排队积压惩罚，DeepScaler 学到了"少部署实例"策略。alibaba 因负载波动大导致 RSR 崩溃。
+
+**下一步：** 将 DeepScaler reward 改为 Lyapunov（与 LGDRL 一致的 `-y`），重训 sin/twitter。如果效果差可恢复此版本。
+
+#### 消融变体（仅 alibaba_largescale）
+
+| 变体 | 目录 | 状态 |
+|------|------|------|
+| w/o Lyapunov | `model/alibaba_largescale_no_lyapunov/0603/2043/PPO_dnn/` | ✅ 训练完成 |
+| w/o Lyapunov (strict) | `model/alibaba_largescale_no_lyapunov_strict/0605/1413/PPO_dnn/` | ✅ 训练完成 |
+| w/o Historical Data | `model/alibaba_largescale_no_history/0603/2043/PPO_dnn/` | ✅ 训练完成 |
+| w/o FFD | `model/alibaba_largescale_no_ffd/0603/2043/PPO_dnn/` | ✅ 训练完成 |
 
 #### CNN 模型（历史）
 
@@ -103,12 +152,12 @@
 
 | V 值 | 目录 | 说明 |
 |------|------|------|
-| V=1 | `model/twitter_largescale/0605/V=1/PPO_dnn/`（或 trained_models/params_exp/V/0604/V=1） | ✅ 已训练 |
+| V=0.1, 0.2, 0.3 | `trained_models/params_exp/V/0_{1,2,3}/` | ✅ 已完成 + 已测试 |
+| V=1 | `model/twitter_largescale/0605/V=1/PPO_dnn/` | ✅ 已训练 |
 | V=2 | `model/twitter_largescale/0605/V=2/PPO_dnn/` | ✅ 已训练 + 已测试 |
 | V=10 | `draw_pictures/fig5/model_autoscaling_0426/model/delta=1/0419/` 等 | ✅ 已训练（旧版模型） |
 | V=100 (default) | 多个版本 | ✅ 已训练 + 已测试 |
 | V=1000 | `model/twitter_largescale/0605/V=1000/PPO_dnn/` | ✅ 已训练 + 已测试 |
-| V=0.1, 0.2, 0.3 | `trained_models/params_exp/V/0_{1,2,3}/` | ✅ 已完成 + 已测试 |
 | N_change 变体 | `trained_models/params_exp/V/N_change=1时/`, `N_change=3/` | ✅ 已完成 |
 
 #### δ 参数实验（队列截断门限）
@@ -121,13 +170,13 @@
 
 ### 1.5 已有测试/实验结果
 
-#### twitter_largescale（最完整）
+#### twitter_largescale（较完整）
 
 `test_output/twitter_largescale/` 包含：
-- ✅ **Baseline 对比数据** (`data/`): LGDRL, HPA, Proscale — 各 19 个指标 (.npy)，含 `t_all`, `cost`, `request_success_rate`, `Qt`, `r` 等
-- ✅ **V 参数测试数据**: V=1, 2, 10, 100, 1000（新），V=0.1, 0.2, 0.3（新），V=1, 10, 100（旧版）
-- ✅ **δ 参数测试数据**: δ=1, 2, 3（含 new 和 old 版本）
-- ✅ **可视化图表**: 26 张 PNG（含 cost_bar, t_all_bar, request_success_rate_bar, Qt, r, lamda, vload 等）
+- ✅ **Baseline 对比数据** (`data/`): LGDRL, HPA, Proscale — 各 19 个指标 (.npy)
+- ✅ **V 参数测试数据**: V=0.1~1000 多版本覆盖
+- ✅ **δ 参数测试数据**: δ=1, 2, 3
+- ✅ **可视化图表**: 26 张 PNG
 - ❌ 缺失：NoScaling, Random, RL_agent (SAC) baseline 测试数据
 
 #### sin_largescale
@@ -136,6 +185,11 @@
 - ✅ **Baseline 对比数据** (`data/`): LGDRL, HPA, HPA_ideal, Proscale — 各 19 个指标
 - ✅ **可视化图表**: 26 张 PNG
 - ❌ 缺失：NoScaling, Random, RL_agent (SAC)
+
+#### alibaba_largescale
+
+`test_output/alibaba_largescale/` 包含：
+- ✅ 测试输出目录存在
 
 #### twitter_middlescale / sin_middlescale / twitter_smallscale / sin_smallscale
 
@@ -147,21 +201,25 @@
 
 ### 1.6 已有图表 (`draw_pictures/`)
 
-| 图表 | 路径 | 内容 |
-|------|------|------|
-| Fig.1 负载曲线 | `fig1/` | `loads-sin.pdf`, `loads-twitter.pdf` |
-| Fig.2 收敛/结果 | `fig2/` | `sin-Large Scale.pdf`, `twitter-Large Scale.pdf` |
-| Fig.3 训练曲线 | `fig3/` | `Train.pdf`（PPO+SAC, Sin+Twitter），含 `data/` JSON |
-| Fig.4 时隙变化 | `fig4/` | 延迟/成本时隙图（sin+twitter Large Scale） |
-| Fig.5 参数敏感性 | `fig5/` | V 参数（Cost/Latency vs V），δ 参数（`delta.py`），含旧版模型数据 |
-| 数据导出 | `export_excel.py` | 批量导出实验数据到 Excel |
+| 图表 | 路径 | 内容 | 状态 |
+|------|------|------|------|
+| Fig.1 负载曲线 | `fig1/` | `loads-sin.pdf`, `loads-twitter.pdf`, **`loads-alibaba.pdf`** | ✅ 三场景完成 |
+| Fig.2 收敛/结果 | `fig2/` | `sin-Large Scale.pdf`, `twitter-Large Scale.pdf`, **`alibaba-Large Scale.pdf`** | ✅ 三场景完成 |
+| Fig.3 训练曲线 | `fig3/` | `Train.pdf`（PPO+SAC, Sin+Twitter），含 `data/` JSON | ✅ 完成 |
+| Fig.4 时隙变化 | `fig4/` | 延迟/成本时隙图（**sin + twitter + alibaba** Large Scale） | ✅ 三场景完成 |
+| Fig.5 参数敏感性 | `fig5/` | V 参数（Cost/Latency vs V），δ 参数（`delta.py`） | ✅ 完成（仅 sin/twitter） |
+| **Fig.6 消融实验** | `fig6/` | **消融对比图（alibaba）**: Latency/Cost/SuccessRate，5 变体 | ✅ **新增完成** |
+| 数据导出 | `export_excel.py` | 批量导出实验数据到 Excel | ✅ |
 
 ### 1.7 消融策略说明
 
-- **w/o Lyapunov**：通过 `--ablation no_lyapunov` 切换到 `weighted` reward
-- **w/o Historical Data**：通过 `--ablation no_prediction` 移除 state 历史通道（ch 3-5），统一回应 R1-2 和 R2-3
-- **w/o FFD**：通过 `--ablation no_ffd` 随机初始部署
-- 上述三个消融均 **未开始训练**，属于 Section 5.4 的内容
+消融通过 config 中的 flag 控制（`ablation_no_lyapunov_strict`, `ablation_no_history`, `ablation_no_ffd`），无需 CLI 参数：
+
+- **w/o Lyapunov**：`ablation_no_lyapunov_strict=True`，奖励改为加权和
+- **w/o Historical Data**：`ablation_no_history=True`，移除 state 历史通道（ch 3-5）
+- **w/o FFD**：`ablation_no_ffd=True`，随机初始部署
+- ✅ Alibaba 场景三个消融变体均已训练完成
+- ❌ Sin/Twitter 场景消融变体尚未训练
 
 ### 1.8 已完成 vs 待做
 
@@ -169,68 +227,68 @@
 
 - [x] Sin + Twitter 三规格（small/middle/large）PPO 训练
 - [x] Sin + Twitter large-scale SAC 训练（RL_agent baseline）
+- [x] **Alibaba large-scale PPO 训练**（20000ep）
+- [x] **Alibaba large-scale SAC 训练**（2 次）
+- [x] **Alibaba config 创建**（`config_alibaba_largescale.py`）
+- [x] **Alibaba 测试输出**
+- [x] **消融实验（alibaba）**: w/o Lyapunov, w/o History, w/o FFD — 全部训练完成
+- [x] **DeepScaler GNN 训练**（alibaba，2 次）
+- [x] **Fig.1 负载曲线**：Sin + Twitter + Alibaba 三合一
+- [x] **Fig.2 收敛/结果**：三场景 Large Scale
+- [x] **Fig.3 训练曲线**：PPO+SAC, Sin+Twitter
+- [x] **Fig.4 时隙变化**：三场景 Latency + Cost
+- [x] **Fig.5 参数敏感性**：V 参数 + δ 参数
+- [x] **Fig.6 消融对比**：alibaba 场景 5 变体（Latency/Cost/SuccessRate）
 - [x] Twitter large-scale V 参数实验（V=0.1~1000，多版本覆盖）
 - [x] Twitter large-scale δ 参数实验（δ=1,2,3）
 - [x] N_change 变体实验
 - [x] Twitter/Sin large-scale baseline 测试（LGDRL vs HPA/Proscale）
 - [x] Twitter/Sin 所有规格测试输出与可视化图表
-- [x] Fig.1-5 初版图表生成（draw_pictures/）
 - [x] Alibaba Cluster Trace v2022 数据下载与预处理（`data/loads-alibaba-v2022.txt`）
 - [x] Predicter 模块实现
-- [x] DeepScaler GNN 代码骨架
 
-#### 🔄 进行中
-
-| 章节 | 任务 | 预计 | 备注 |
-|------|------|------|------|
-| 5.3 | Alibaba 全量训练 (20000ep) | ~8h | ⚠️ Alibaba config 尚未创建 |
+---
 
 #### ⬜ P0 — 必须完成
 
 | 章节 | 任务 | 回应的审稿意见 | 预计工作量 | 当前进度 |
 |------|------|---------------|-----------|----------|
-| 5.1 | **Alibaba 配置创建**（`alibaba_largescale` 等） | — | 低 | ❌ config 文件未创建 |
-| 5.2 | **训练收敛曲线**（PPO+SAC, 3 场景） | — | 低 | TensorBoard 已有，需绘图 |
-| 5.2 | **训练开销统计**（wall time / GPU / inference） | R2-5 | 中 | ❌ 需在 PPO/SAC 加计时器 |
-| 5.3 | **Alibaba 训练 + 测试** | R2-4 | 中 | ❌ 未开始 |
-| 5.4 | **消融实验**: w/o Lyapunov | R1-3 | 各 20000ep ≈ 11h | ❌ 未开始 |
-| 5.4 | **消融实验**: w/o Historical Data | R1-2, R2-3 | 同上 | ❌ 未开始 |
-| 5.4 | **消融实验**: w/o FFD | — | 同上 | ❌ 未开始 |
-| 5.3 | NoScaling/Random/RL_agent baseline 补测 | — | 低 | ❌ twitter+sin largescale 缺此数据 |
+| 5.2 | **训练开销统计**（wall time / GPU / inference） | R2-5 | 中 | ❌ 需在 PPO/SAC/DeepScaler 加计时器，重跑一次训练 |
+| 5.4 | **消融结果汇总表 (Table)** — 仅 alibaba 场景 | R1-3 | 低 | ❌ fig6 有图但缺论文级数值表（均值±std） |
+| 5.3 | **NoScaling/Random/SAC baseline 补测**（twitter + sin + alibaba） | — | 低 | ❌ 三个场景均缺 |
+| 5.3 | **Alibaba 全 baseline 对比图**（HPA/ProScaling/NoScaling/Random/SAC/LGDRL） | R2-4 | 低 | ❌ 缺除 LGDRL 外的 baseline 对比 |
 
 #### ⬜ P1 — 强烈建议
 
 | 章节 | 任务 | 回应的审稿意见 | 预计工作量 | 当前进度 |
 |------|------|---------------|-----------|----------|
-| 5.5.1 | **V 参数实验整理**（已有 V=0.1~1000，需补 V=10 最新训练） | — | 低 | 🔄 数据大都有，需统一绘图 |
+| 5.3 | **DeepScaler 性能对比图** | R2-1 | 低 | 🔄 模型已训练，需测试 + 绘图 |
+| 5.4 | **消融实验补 sin/twitter**（可选，增强说服力） | R1-3 | 高（6 次训练 × ~4h） | ❌ 时间允许再补 |
+| 5.5.1 | **V 参数图统一**（已有 V=0.1~1000，需补 alibaba 场景 + 统一绘图） | — | 低 | 🔄 数据大部分有 |
+| 5.5.1 | **δ 参数图补全**（缺 twitter/alibaba 的 δ 实验） | — | 中 | 🔄 仅 sin 有 |
 | 5.5.2 | **大规模可扩展性**（30/50+ nodes） | R1-1 | 高 | ❌ 未开始，无 xlargescale config |
-| 6.3 | **DeepScaler/GNN 训练与对比** | R2-1 | 中 | ❌ 代码骨架存在，未训练 |
 
 #### ⬜ P2 — 分析/文字回应
 
 | 章节 | 任务 | 回应的审稿意见 | 当前进度 |
 |------|------|---------------|----------|
 | 5.5.3 | 通信延迟敏感性（测试阶段 T0 变化） | R2-2 | ❌ 未开始 |
-| 7.2 | 历史数据利用文字分析 | R1-2 | ❌ 未开始 |
-| 7.3 | MFFD+MDRL 解耦讨论 | R2-6 | ❌ 未开始 |
+| 7.2 | 历史数据利用文字分析 | R1-2 | 🔄 消融数据已有（alibaba），需撰写文字 |
+| 7.3 | MFFD+MDRL 解耦讨论 | R2-6 | 🔄 消融数据已有（alibaba w/o FFD），需撰写文字 |
 
-> **已决策不单独做**：预测精度（MAE/RMSE）→ 合并至消融"w/o Historical Data"（Section 5.2 已说明）
->
-> **⚠️ Alibaba 进展修正**：TODO 之前标记 config 为 ✅，但 `env/configs/` 中实际无 alibaba 相关配置文件，需先创建 config 才能开始训练。
+> **已决策不单独做**：预测精度（MAE/RMSE）→ 合并至消融"w/o Historical Data"（消融数据已齐）
 
 ---
 
 ## 2. 总体执行路线
 
 ```text
-Phase 0：最小复现验证
-  -> Phase 1：复现原论文图表
-  -> Phase 2：P0 Major Revision 新增实验
-  -> Phase 3：P1 扩展实验
-  -> Phase 4：P2 分析与论文回应
+Phase 0：最小复现验证          ✅ 已完成
+  -> Phase 1：复现原论文图表     ✅ 已完成（含 Alibaba 扩展）
+  -> Phase 2：P0 Major Revision  🔄 进行中（消融 alibaba ✅，剩余：开销统计 + baseline 补测）
+  -> Phase 3：P1 扩展实验        ⬜ 部分进行中（DeepScaler 已训练，缺对比图）
+  -> Phase 4：P2 分析与论文回应  ⬜ 未开始
 ```
-
-原则：先确认 Phase 0 能复现原论文趋势，再启动耗时的 P1/P2 实验，避免白跑 GPU。
 
 ---
 
@@ -240,50 +298,36 @@ Phase 0：最小复现验证
 
 | 章节 | 对应原论文 | 审稿意见 | 优先级 | 状态 | 产出 |
 |------|-----------|----------|--------|------|------|
-| 5.1 Experiment Settings | 5.1（更新） | — | — | 🔄 需修改 | 新增 Alibaba/large-scale 场景 + 更新参数表 |
-| 5.2 Algorithm Convergence & Overhead | 5.2（Fig.6） | R2-5 | **P0** | 🔄 需重跑 | Fig.5 收敛曲线（PPO+SAC）+ Table 训练开销 |
-| 5.3 Overall Performance | 5.2（Fig.7-9） | R2-4 | **P1** | 🔄 需重跑 | Fig.6-8 性能对比 + Table 汇总（含 Alibaba） |
-| 5.4 Ablation Study | **新增** | R1-2, R1-3, R2-3 | **P0** | ❌ 未开始 | Fig.9 消融对比 + Table 消融表 |
-| 5.5 Parameter Sensitivity Analysis | 5.2（Fig.10）**新增** | R1-1, R2-2 | **P1** | 🔄 部分需补 | Fig.10-12 敏感性分析（V / 规模 / 通信延迟） |
+| 5.1 Experiment Settings | 5.1（更新） | — | — | ✅ 完成 | Alibaba 场景 + 参数表 + Fig.1 负载曲线（三合一） |
+| 5.2 Algorithm Convergence & Overhead | 5.2（Fig.6） | R2-5 | **P0** | 🔄 图已完成，开销表未做 | Fig.3 收敛曲线 ✅ + Table 训练开销 ❌ |
+| 5.3 Overall Performance | 5.2（Fig.7-9） | R2-4 | **P0** | 🔄 部分完成 | Fig.2/4 三场景 ✅，缺全 baseline 对比 |
+| 5.4 Ablation Study | **新增** | R1-2, R1-3, R2-3 | **P0** | ✅ alibaba 完成 | Fig.6 alibaba ✅ + Table 需整理 |
+| 5.5 Parameter Sensitivity Analysis | 5.2（Fig.10）**新增** | R1-1, R2-2 | **P1** | 🔄 部分完成 | Fig.5 V/δ ✅（sin/twitter），缺 alibaba |
 
-> **注**：R1-2（历史数据利用）和 R2-3（预测机制）统一通过消融实验中的「w/o Historical Data」变体回应——论文未提及具体预测模型，state 中历史到达率通道即为唯一预测信息来源，消融对比直接量化其贡献。不再单设预测精度/噪声实验章节。
+> **注**：R1-2（历史数据利用）和 R2-3（预测机制）统一通过消融实验中的「w/o Historical Data」变体回应——Alibaba 消融已完成，直接量化了历史到达率通道的贡献。
 
 ### 5.1 Experiment Settings（更新）
 
-**对应原论文 5.1** | **状态**：🔄 需修改
+**状态**：✅ 完成
 
-原有场景：
-- **Sin 负载**：$a=15, b=10, T_1=288$，随机扰动 $n_i\in[-5,5]$
-- **Twitter 负载**：2022-11-01 Twitter trace，数学变换适配实验规模
-- **节点规模**：small (5), middle (7), large (10)
+已完成：
+- ✅ `config_alibaba_largescale.py` 创建
+- ✅ Alibaba trace 数据预处理（`data/loads-alibaba-v2022.txt`）
+- ✅ Fig.1 负载曲线（Sin + Twitter + Alibaba 三合一）
 
-Major Revision 新增：
-- **Alibaba 负载**：Alibaba Cluster Trace v2022，`data/loads-alibaba-v2022.txt`
-- **超大规模**：30/50+ nodes（`twitter_xlargescale`）
-- **更新参数表**：新增 Alibaba 配置参数、通信延迟变体参数
-
-**产出**：
-- 更新后场景描述（新增 Alibaba trace 说明 + large-scale 规格）
-- 更新参数表 Table I（补充新增配置项）
-- Fig.4 负载曲线（Sin + Twitter + Alibaba 三合一）
+待做（文字）：
+- [ ] 更新论文 5.1 节场景描述，新增 Alibaba trace 说明
+- [ ] 更新参数表 Table I
 
 ### 5.2 Algorithm Convergence & Training Overhead（训练收敛与开销）⭐ P0
 
-**对应原论文 Fig.6 + 审稿意见 R2-5** | **状态**：🔄 需重跑
+**状态**：🔄 图已完成，开销统计未做
 
-**5.2.1 训练收敛**：
-- PPO 训练收敛曲线（Sin + Twitter + Alibaba，3 条曲线）
-- SAC 训练收敛曲线（同场景，作为 RL_agent baseline 的收敛证明）
-- 横轴：training iterations，纵轴：episode reward
+**5.2.1 训练收敛**：✅ 已完成
+- ✅ Fig.3 训练收敛曲线（PPO+SAC, Sin+Twitter）
+- ✅ TensorBoard 日志齐全（三场景 PPO + SAC）
 
-**命令**：
-```bash
-python run.py train --config twitter_largescale --algo ppo --device cuda:0
-python run.py train --config sin_largescale --algo ppo --device cuda:1
-python run.py train --config twitter_largescale --algo sac --device cuda:0
-```
-
-**5.2.2 训练开销统计**（回应 R2-5）：
+**5.2.2 训练开销统计**（回应 R2-5）：❌ 未开始
 
 | 指标 | 数据来源 | 说明 |
 |------|----------|------|
@@ -296,11 +340,10 @@ python run.py train --config twitter_largescale --algo sac --device cuda:0
 **实现任务**：
 - [ ] `methods/PPO_dnn.py`：添加计时和显存统计
 - [ ] `methods/SAC.py`：同样统计
+- [ ] `methods/DeepScaler.py`：同样统计
 - [ ] 输出保存到 `outputs/results/{config}/{experiment}/overhead.json`
 
-**产出**：
-- Fig.5 训练收敛曲线（含 PPO + SAC，3 场景）
-- Table 训练开销表
+**产出**：Table 训练开销表
 
 | Config | Algo | Wall Time (h) | Converge Epoch | GPU Peak (GB) | Inference (ms) | Rollout (s) |
 |--------|------|--------------|----------------|---------------|-----------------|-------------|
@@ -308,114 +351,69 @@ python run.py train --config twitter_largescale --algo sac --device cuda:0
 | twitter_largescale | SAC | TBD | TBD | TBD | TBD | TBD |
 | sin_largescale | PPO | TBD | TBD | TBD | TBD | TBD |
 | alibaba_largescale | PPO | TBD | TBD | TBD | TBD | TBD |
+| alibaba_largescale | SAC | TBD | TBD | TBD | TBD | TBD |
+| alibaba_largescale | DeepScaler | TBD | TBD | TBD | TBD | TBD |
 
-### 5.3 Overall Performance Comparison（整体性能对比）⭐ P1
+### 5.3 Overall Performance Comparison（整体性能对比）⭐ P0
 
-**对应原论文 Fig.7-9 + 审稿意见 R2-4（Alibaba 泛化）** | **状态**：🔄 需重跑
+**状态**：🔄 部分完成（三场景图表有，但缺全 baseline 对比）
 
-**实验内容**：
-- 对比 agents：`NoScaling`, `Random`, `PPA`, `ProScale`, `RL_agent`(SAC), `LGDRL`(PPO)
-- 指标：average request latency, cost, request success rate
-- 场景：Sin + Twitter（复用）+ **Alibaba（新增，回应 R2-4）**
+**已完成**：
+- ✅ Fig.2 收敛/结果柱状图（sin/twitter/alibaba Large Scale）
+- ✅ Fig.4 时隙变化（sin/twitter/alibaba Latency + Cost）
+- ✅ `test_output/alibaba_largescale/` 存在
 
-**Alibaba 数据进展**（R2-4）：
-- ✅ `data/loads-alibaba-v2022.txt` — Alibaba Cluster Trace v2022
-- ✅ `configs/alibaba_smallscale.yaml`, `alibaba_middlescale.yaml`, `alibaba_largescale.yaml`
-- ✅ `scripts/prepare_alibaba_v2022.py`
-- [ ] 确认预处理方法，在论文/附录说明数据来源和预处理流程（文字回应）
-
-**训练 + 测试命令**：
-```bash
-# 训练 Alibaba 场景（若未训练）
-python run.py train --config alibaba_largescale --algo ppo --device cuda:0
-
-# 测试 Twitter
-python run.py test --config twitter_largescale \
-    --model RL_agent=outputs/models/twitter_largescale/sac/best,LGDRL=outputs/models/twitter_largescale/ppo/best \
-    --agents NoScaling,Random,PPA,ProScale,RL_agent,LGDRL \
-    --output outputs/results/twitter_largescale/baseline
-
-# 测试 Alibaba
-python run.py test --config alibaba_largescale \
-    --model RL_agent=outputs/models/alibaba_largescale/sac/best,LGDRL=outputs/models/alibaba_largescale/ppo/best \
-    --agents NoScaling,Random,PPA,ProScale,RL_agent,LGDRL \
-    --output outputs/results/alibaba_largescale/baseline
-```
+**缺失**：
+- ❌ NoScaling/Random/SAC baseline 补测（twitter + sin + alibaba）
+- ❌ Alibaba 全 baseline 对比（HPA/ProScaling/NoScaling/Random/SAC vs LGDRL）
+- ❌ DeepScaler 性能对比（模型已训练，缺测试 + 绘图）
+- ❌ 跨数据集性能汇总 Table
 
 **产出**：
-- Fig.6 三指标柱状图（3 场景 × 6 agents）
-- Fig.7 延迟时隙变化（3 场景，LGDRL vs baselines）
-- Fig.8 成本时隙变化（3 场景，LGDRL vs baselines）
+- Fig.2 三指标柱状图（3 场景 × 6+ agents）— 需补完整 baseline
+- Fig.4 延迟/成本时隙变化（3 场景）— ✅ 已完成
 - Table 跨数据集性能汇总（Sin / Twitter / Alibaba 三列对比）
 
 ### 5.4 Ablation Study（消融实验）⭐ P0
 
-**对应审稿意见 R1-2（历史数据利用）, R1-3（Lyapunov 贡献）, R2-3（预测机制）** | **状态**：❌ 未开始 | **优先级 P0**
+**状态**：✅ Alibaba 完成（审稿未要求多数据集消融）
 
-**目标**：量化 AutoLFD 各组件的独立贡献。
+> **决策**：两位审稿人的消融相关意见（R1-2, R1-3, R2-3）均未要求多数据集消融。R1-3 原文仅要求 "adding an ablation study to illustrate a direct quantification of the specific contribution of Lyapunov optimization"，未提及多场景。消融在 Alibaba 数据集上完成即可，论文中写 "We conduct the ablation study on the Alibaba trace" 即可满足审稿要求。主实验性能对比已覆盖 Sin/Twitter/Alibaba 三场景（R2-4），两者互补。
 
-**实验变体**：
+**Alibaba 消融**（✅ 已完成）：
+- ✅ 训练：Full, w/o Lyapunov (strict), w/o History, w/o FFD, Full+no-FFD（5 变体）
+- ✅ 图表：`draw_pictures/fig6/` — Latency/Cost/SuccessRate 三张图
+- ✅ 数据：`draw_pictures/fig6/data/` — 15 个 .npy 文件
 
-| 变体 | 描述 | 消融目标 | 对应审稿意见 |
-|------|------|----------|-------------|
-| **AutoLFD** (Full) | 完整三阶段框架 | 基准 | — |
-| **w/o Lyapunov** | 奖励函数改为加权和 $-(\alpha\cdot cost + \beta\cdot mean\_delay)$ | Lyapunov drift-plus-penalty 的贡献 | R1-3 |
-| **w/o Historical Data** | state 移除历史到达率通道（ch 3-5），DRL 仅靠当前部署和资源状态决策 | 历史到达率信息的贡献 | R1-2, R2-3 |
-| **w/o FFD** | 随机/中性初始部署替代 MFFD | 初始部署策略的贡献 | — |
+**待做**：
+- [ ] 从 fig6 数据中提取消融结果汇总 Table（均值±std，4 变体 × 3 指标）
+- [ ] 论文 5.4 节撰写消融分析文字
 
-> **说明**：论文中状态定义仅提及 $R_{his}$（历史到达率），未描述具体的预测模型。代码中 state 通道 3-5 统一承载历史到达率信息（包含 SMA 平滑值与原始历史序列）。消融时通过 `--ablation no_prediction` 移除全部三个通道，对比「有历史到达率」vs「无历史到达率」的性能差异。此消融直接回应 R1-2（DRL 如何利用 $R_{his}$）和 R2-3（预测信息的贡献），无需单独设置预测精度实验章节。
-
-**训练命令**：
-```bash
-python run.py train --config twitter_largescale --algo ppo --ablation no_lyapunov --device cuda:0
-python run.py train --config sin_largescale --algo ppo --ablation no_lyapunov --device cuda:1
-python run.py train --config twitter_largescale --algo ppo --ablation no_prediction --device cuda:0
-python run.py train --config twitter_largescale --algo ppo --ablation no_ffd --device cuda:0
-```
+**可选扩展**（P1，时间允许）：
+- 如果有余力可补 sin/twitter 消融训练增强说服力，但非必须
+- 参考 `draw_pictures/fig6/draw.py` 中的 `make_config(ablation_no_lyapunov_strict=True)` 方式实现
 
 **产出**：
-- Fig.9 消融对比图（延迟/成本/成功率，4 变体对比）
-- Table 消融结果汇总表
-
-| Variant | Latency (ms) | Cost | Success Rate | vs Full (Δ) |
-|---------|-------------|------|-------------|-------------|
-| AutoLFD (Full) | TBD | TBD | TBD | — |
-| w/o Lyapunov | TBD | TBD | TBD | TBD |
-| w/o Historical Data | TBD | TBD | TBD | TBD |
-| w/o FFD | TBD | TBD | TBD | TBD |
+- Fig.6 消融对比图（alibaba）✅
+- Table 消融结果汇总表（alibaba × 4 变体）❌ 需整理
 
 ### 5.5 Parameter Sensitivity Analysis（参数敏感性分析）⭐ P1
 
-**对应原论文 Fig.10 + 审稿意见 R1-1, R2-2** | **状态**：🔄 部分需补 | **优先级 P1**
+**状态**：🔄 部分完成
 
-统一章节分析三类参数对系统性能的敏感性。
+**5.5.1 V Parameter（Lyapunov 权衡系数）**：✅ Twitter 数据齐全
+- ✅ V=0.1~1000 全覆盖（twitter_largescale）
+- ✅ Fig.5 V 参数图已绘制
+- ❌ 缺 alibaba 场景的 V 参数实验
 
----
+**5.5.2 δ Parameter（队列截断门限）**：🔄 仅 sin
+- ✅ δ=1,2,3 已训练 + 测试（sin_largescale）
+- ✅ Fig.5 δ 参数图已绘制
+- ❌ 缺 twitter/alibaba 的 δ 实验
 
-**5.5.1 V Parameter（Lyapunov 权衡系数）**
-
-**对应原论文 Fig.10** | **状态**：🔄 需补跑 V=10/1000
-
-- 固定其他参数，变化 $V\in\{10, 100, 1000\}$
-- 观察虚拟队列 $Q(t)$ 稳定性、延迟-成本 trade-off
-
-```bash
-for V in 10 1000; do
-    python run.py train --config twitter_largescale --algo ppo --v "$V" --device cuda:0
-done
-```
-
-> 确保模型保存路径区分 V 值，避免覆盖 `best` checkpoint。
-
-**产出**：Fig.10 V 参数影响（延迟 + 成本 vs V）
-
----
-
-**5.5.2 Scalability（集群规模可扩展性）**
-
-**对应审稿意见 R1-1** | **状态**：❌ 未开始
-
-**目标**：验证扁平动作空间 $(s_i, m_j, N_{change})$ 在 30/50+ nodes 下的训练可行性。
+**5.5.3 Scalability（集群规模可扩展性）**：❌ 未开始
+- ❌ 无 xlargescale config
+- ❌ 无 30/50+ nodes 实验
 
 | 配置 | Nodes | MS | 动作空间规模 | 预计显存 | 预计训练时间 |
 |------|-------|-----|-------------|----------|-------------|
@@ -425,392 +423,136 @@ done
 
 **实施策略**：先 30-node 探针 → 稳定后 50+ nodes；若 OOM 或稀疏则报告 boundary + 讨论 hierarchical action space。
 
-**新增配置**：`configs/twitter_xlargescale.yaml`, `configs/twitter_xxlargescale.yaml`
-
-**产出**：Fig.11 大规模性能 + 训练效率 vs 集群规模
-
----
-
-**5.5.3 Communication Latency（通信延迟敏感性）**
-
-**对应审稿意见 R2-2** | **状态**：❌ 未开始
-
-**方案**（保守 — 不重跑主实验）：保持已训练模型不变，测试阶段变化 $T_0\in\{1, 2, 5, 10, 20\}$ ms 或注入随机扰动。
-
-**实现任务**：
-- [ ] `configs/base.yaml`：增加 `T0_variable` / `T0_noise` 参数
-- [ ] `env/environment.py`：支持可变通信延迟
-- [ ] `run.py test`：添加 `--t0` / `--t0-noise` 参数
-
-**产出**：Fig.12 通信延迟敏感性曲线（延迟/成本/成功率 vs $T_0$）
+**5.5.4 Communication Latency（通信延迟敏感性）**：❌ 未开始
+- 保持已训练模型不变，测试阶段变化 $T_0\in\{1, 2, 5, 10, 20\}$ ms
 
 ---
 
 ### 论文新增图表清单
 
-| 图表编号 | 内容 | 对应章节 | 优先级 |
-|----------|------|----------|--------|
-| Fig.4 (更新) | Sin + Twitter + Alibaba 负载曲线 | 5.1 | — |
-| Fig.5 (更新) | PPO + SAC 训练收敛曲线（3 场景） | 5.2 | — |
-| Fig.6 (更新) | 三指标柱状图（3 场景 × 6 agents） | 5.3 | — |
-| Fig.7 (更新) | 延迟时隙变化（3 场景） | 5.3 | — |
-| Fig.8 (更新) | 成本时隙变化（3 场景） | 5.3 | — |
-| **Fig.9 (新增)** | 消融对比图 | 5.4 | P0 |
-| **Fig.10 (更新/新增)** | V 参数敏感性（V=10/100/1000） | 5.5.1 | P1 |
-| **Fig.11 (新增)** | 大规模可扩展性（性能 + 训练效率） | 5.5.2 | P1 |
-| **Fig.12 (新增)** | 通信延迟敏感性 | 5.5.3 | P2 |
-| **Table (新增)** | 训练开销表 | 5.2 | P0 |
-| **Table (更新)** | 跨数据集性能汇总（Sin/Twitter/Alibaba） | 5.3 | P1 |
-| **Table (新增)** | 消融结果汇总 | 5.4 | P0 |
-| **Table (新增)** | 可扩展性汇总 | 5.5.2 | P1 |
+| 图表编号 | 内容 | 对应章节 | 优先级 | 状态 |
+|----------|------|----------|--------|------|
+| Fig.1 (更新) | Sin + Twitter + Alibaba 负载曲线 | 5.1 | — | ✅ |
+| Fig.2 (更新) | 三场景收敛/结果柱状图 | 5.3 | — | 🔄 需补全 baseline |
+| Fig.3 (更新) | PPO + SAC 训练收敛曲线 | 5.2 | — | ✅ |
+| Fig.4 (更新) | 三场景延迟/成本时隙变化 | 5.3 | — | ✅ |
+| Fig.5 (更新) | V 参数 + δ 参数敏感性 | 5.5.1 | — | 🔄 缺 alibaba |
+| **Fig.6 (新增)** | 消融对比图（Latency/Cost/SuccessRate, alibaba） | 5.4 | P0 | ✅ alibaba 完成 |
+| Fig.7 (新增) | DeepScaler 对比 | 5.3 | P1 | ❌ 需测试 + 绘图 |
+| **Table (新增)** | 训练开销表 | 5.2 | P0 | ❌ |
+| **Table (新增)** | 跨数据集性能汇总 | 5.3 | P0 | ❌ |
+| **Table (新增)** | 消融结果汇总（alibaba × 4 变体） | 5.4 | P0 | 🔄 alibaba 数据有，需整理成表 |
+| **Table (新增)** | 可扩展性汇总 | 5.5.2 | P1 | ❌ |
 
 ---
 
-## 3. Phase 0：最小复现验证
+## 3. 剩余工作量估算
 
-目标：用最小代价确认当前代码能复现论文数量级。
+### P0 任务（必须完成）
 
-### 3.1 训练两个主场景 PPO
+| 任务 | GPU 时间 | 人工时间 | 并行策略 |
+|------|---------|---------|---------|
+| 训练开销统计（加计时重跑） | 2-4h（选代表性场景） | 中（改代码） | 改完代码后单次训练即可 |
+| 全 baseline 补测（3 场景） | 0（无需 GPU 训练） | 低（跑测试） | CPU 即可 |
+| 消融/性能汇总 Table | 0 | 低（整理数据） | — |
 
-```bash
-conda run -n as python run.py train \
-    --config twitter_largescale --algo ppo --device cuda:0
+**P0 总 GPU 时间**：约 2-4h
+**P0 总人工时间**：约 2-3 天
 
-conda run -n as python run.py train \
-    --config sin_largescale --algo ppo --device cuda:1
-```
+### P1 任务（强烈建议）
 
-预计耗时：large-scale 20000 epochs 每个约 4-6 小时。
+| 任务 | GPU 时间 | 人工时间 |
+|------|---------|---------|
+| DeepScaler 测试 + 对比图 | 0（模型已有） | 低 |
+| 消融 sin/twitter（可选增强） | 12-24h | 低 |
+| V/δ 参数图补全（alibaba） | 可能需要训练 | 中 |
+| 大规模可扩展性（30/50 nodes） | 12-36h | 高（新 config + 训练） |
 
-### 3.2 测试原始 baseline
+### P2 任务（文字回应）
 
-```bash
-conda run -n as python run.py test \
-    --config twitter_largescale \
-    --model outputs/models/twitter_largescale/ppo/best \
-    --agents NoScaling,Random,ProScaling,HPA,LGDRL \
-    --output outputs/results/twitter_largescale/phase0
-
-conda run -n as python run.py test \
-    --config sin_largescale \
-    --model outputs/models/sin_largescale/ppo/best \
-    --agents NoScaling,Random,ProScaling,HPA,LGDRL \
-    --output outputs/results/sin_largescale/phase0
-```
-
-### 3.3 通过标准
-
-| 检查项 | 预期 | 判定标准 |
-|--------|------|----------|
-| 收敛性 | reward 经过 warm-up 后稳定 | 曲线不持续发散 |
-| 排名 | LGDRL > ProScaling > HPA > Random > NoScaling | 大体排序一致 |
-| Twitter 改进 | 接近论文幅度 | 偏差 < 50% 可接受 |
-| Sin 改进 | 接近论文幅度 | 偏差 < 50% 可接受 |
-| 成本 | 围绕预算 `C=35` | 平均成本在 25-45 |
-
-如果 Phase 0 不通过，最多投入 2 天排查：奖励缩放、M/M/c 公式、队列截断、seed patch、config mismatch。
+| 任务 | 时间 |
+|------|------|
+| 通信延迟敏感性 | 中（实现 + 小规模测试） |
+| 历史数据利用文字分析 | 低（消融数据已有） |
+| MFFD+MDRL 解耦讨论 | 低（消融数据已有） |
 
 ---
 
-## 4. Phase 1：复现原论文图表
+## 4. 建议执行顺序
 
-目标：在新增实验前先复现原始论文图表，形成可对照基线。
-
-| 图表 | 内容 | 数据来源 | 状态 |
-|------|------|----------|------|
-| Fig.5 | Sin/Twitter 负载曲线 | `data/loads-*.txt` | 无需训练 |
-| Fig.6 | 训练收敛曲线 | TensorBoard logs | 需 PPO 训练日志 |
-| Fig.7 | 三指标平均性能 | Phase 0 测试结果 | 需模型和 baseline |
-| Fig.8 | 延迟时隙变化 | `t_all.npy` | Phase 0 输出 |
-| Fig.9 | 成本时隙变化 | `cost.npy` | Phase 0 输出 |
-| Fig.10 | V 参数影响 | V=10/100/1000 模型 | 需额外训练 |
-
-### 4.1 V 参数实验
-
-V=100 为默认配置，额外训练 V=10、1000：
-
-```bash
-for V in 10 1000; do
-    conda run -n as python run.py train \
-        --config twitter_largescale --algo ppo --v "$V" --device cuda:0
-done
 ```
+Week 1（06/06 - 06/12）：P0 收尾 + P1 启动
+  Day 1: PPO/SAC/DeepScaler 添加计时器 → 重跑一次训练
+  Day 2-3: 全 baseline 补测（NoScaling/Random/SAC/HPA/ProScaling，三场景）
+  Day 3: 整理消融/性能汇总 Table
+  Day 4-5: DeepScaler 测试 + 对比图
 
-注意：训练前必须确认模型保存路径能区分不同 V 值，避免 `outputs/models/twitter_largescale/ppo/best` 被覆盖。
+Week 2（06/13 - 06/19）：P1 扩展 + P2 文字
+  Day 1-2: 大规模可扩展性实验（30 nodes 探针）或 消融补 sin/twitter（可选）
+  Day 3: V/δ 参数图补全
+  Day 4: 通信延迟敏感性（如果时间允许）
+  Day 5: 历史数据利用 + MFFD解耦 文字分析
 
-测试：
-
-```bash
-for V in 10 100 1000; do
-    conda run -n as python run.py test \
-        --config twitter_largescale \
-        --model outputs/models/twitter_largescale/ppo/best \
-        --agents LGDRL \
-        --output "outputs/results/twitter_largescale/V${V}"
-done
+Week 3-4（06/20 - 07/02）：论文修改 + Response Letter
+  论文正文修改
+  Response letter 逐条对应
+  图表/表格最终整理
 ```
 
 ---
 
-## 5. Phase 2：P0 Major Revision 新增实验
-
-这些实验优先完成，直接回应审稿人最核心的问题。
-
-### 5.1 Lyapunov 消融实验（R1-3）
-
-目标：量化 Lyapunov drift-plus-penalty reward 的贡献。
-
-需要对比：
-
-- [ ] Full AutoLFD/LGDRL
-- [ ] w/o Lyapunov：奖励改为 `-(alpha * cost + beta * mean_delay)`
-- [ ] w/o Historical Data：移除 state 历史到达率通道（ch 3-5），DRL 仅靠当前部署和资源状态决策
-- [ ] 可选 w/o FFD：随机/中性初始部署，仅在实现稳定时加入
-
-训练命令：
-
-```bash
-conda run -n as python run.py train \
-    --config twitter_largescale --algo ppo \
-    --ablation no_lyapunov --device cuda:0
-
-conda run -n as python run.py train \
-    --config sin_largescale --algo ppo \
-    --ablation no_lyapunov --device cuda:1
-
-conda run -n as python run.py train \
-    --config twitter_largescale --algo ppo \
-    --ablation no_prediction --device cuda:0
-```
-
-论文输出表：
-
-| 变体 | 延迟 | 成本 | 成功率 | 结论 |
-|------|------|------|--------|------|
-| AutoLFD | TBD | TBD | TBD | 参考 |
-| w/o Lyapunov | TBD | TBD | TBD | Lyapunov 贡献 |
-| w/o Historical Data | TBD | TBD | TBD | 历史到达率信息贡献 |
-| w/o FFD | TBD | TBD | TBD | 初始化贡献 |
-
-### 5.2 预测机制回应（R2-3）
-
-> **已合并至消融实验**。论文未提及具体预测模型（如 SMA），state 中历史到达率通道（ch 3-5）即为唯一预测信息来源。通过消融变体「w/o Historical Data」直接量化其贡献。预测精度（MAE/RMSE）等数值分析不设单独实验，在论文中以文字简要说明 SMA 窗口平均的合理性即可。
-
-### 5.3 训练开销与部署成本（R2-5）
-
-目标：量化 MDRL 的训练时间、收敛速度、推理延迟和 GPU 开销。
-
-| 指标 | 数据来源 |
-|------|----------|
-| 总训练 wall time | logs/TensorBoard |
-| 收敛所需 epochs | reward 曲线 |
-| GPU memory peak | `torch.cuda.max_memory_allocated()` |
-| 单步推理延迟 | action selection timer |
-| 测试 rollout 时间 | runner timer |
-
-实现任务：
-
-- [ ] 在 `methods/PPO_dnn.py` 添加计时和显存统计。
-- [ ] 若包含 SAC，对 `methods/SAC.py` 做同样统计。
-- [ ] 保存到 `outputs/results/{config}/{experiment}/overhead.json`。
-
----
-
-## 6. Phase 3：P1 扩展实验
-
-这些实验能显著增强 Major Revision 说服力，但训练和实现成本更高。
-
-### 6.1 新数据集验证（R2-4）
-
-目标：在 Alibaba 或 Google trace 上验证泛化性。
-
-当前优先选择 Alibaba：
-
-- 数据：`data/loads-alibaba-v2022.txt`
-- 配置：`alibaba_smallscale`, `alibaba_middlescale`, `alibaba_largescale`
-
-任务：
-
-- [ ] 确认 Alibaba 预处理方法，并在论文/附录说明数据来源。
-- [ ] 运行 `python run.py list-configs`，确认配置可加载。
-- [ ] 训练 `alibaba_largescale` PPO。
-- [ ] 对所有 baselines 做测试。
-- [ ] 将 Alibaba 结果加入主性能对比表。
-
-命令：
-
-```bash
-conda run -n as python run.py train \
-    --config alibaba_largescale --algo ppo --device cuda:0
-
-conda run -n as python run.py test \
-    --config alibaba_largescale \
-    --model outputs/models/alibaba_largescale/ppo/best \
-    --agents NoScaling,Random,ProScaling,HPA,LGDRL \
-    --output outputs/results/alibaba_largescale/baseline
-```
-
-### 6.2 大规模可扩展性实验（R1-1）
-
-目标：验证扁平动作空间在 50+ nodes 场景下的训练可行性和性能。
-
-任务：
-
-- [ ] 新增 `twitter_xlargescale.yaml` 或 `alibaba_xlargescale.yaml`。
-- [ ] 先跑 30 nodes 作为显存/速度探针。
-- [ ] 稳定后扩展到 50+ nodes。
-- [ ] 报告动作空间规模、训练时间、显存和性能。
-
-风险：50 nodes 可能超过 16GB 显存，或导致探索过稀疏。
-
-兜底回应：若完整 50-node PPO 失败，报告可观察到的 scalability boundary，并在论文中讨论 hierarchical/parameterized action space。
-
-### 6.3 DeepScaler/GNN baseline（R2-1）
-
-目标：补充更强的图神经网络 autoscaling baseline。
-
-参考：
-
-- DeepScaler, ASE 2023：spatiotemporal GNN with adaptive graph learning。
-- DeepScaling, SoCC 2022。
-- GRAF, ToN 2024。
-
-实现任务：
-
-- [ ] 新增 `methods/DeepScalerGNN.py`。
-- [ ] 使用 microservice call graph 和 edge-node resource graph。
-- [ ] 尽量保持与 AutoLFD 相同 MDP/state/action surface。
-- [ ] 在 `main.py` 和 `run.py` 注册 agent。
-- [ ] 与 LGDRL 在相同 config 下对比。
-
-建议对比：
-
-| 对比 | 隔离因素 |
-|------|----------|
-| DeepScaler-GNN vs LGDRL | GNN baseline vs Lyapunov-guided DRL |
-| DeepScaler-GNN vs LGDRL-CNN | 编码器差异 |
-| 可选 LGDRL-GNN | Lyapunov reward + GNN encoder |
-
----
-
-## 7. Phase 4：P2 分析与论文回应
-
-### 7.1 通信延迟模型（R2-2）
-
-优先方案：
-
-- 将固定 `T0` 改为可配置的 variable latency model。
-- 候选模型：base latency + hop latency + transfer size / bandwidth + bounded jitter。
-- 在 `configs/base.yaml` 增加参数。
-- 做小规模 sensitivity，不强制重跑所有实验。
-
-保守方案：
-
-- 在论文中承认固定 `T0` 的局限。
-- 增加不同 `T0` 或随机扰动下的小规模敏感性分析。
-
-### 7.2 历史数据利用分析（R1-2）
-
-目标：说明和量化 `R_his` 对策略的贡献。
-
-可选方法：
-
-- Feature ablation：mask state channels 4-5 后测试性能下降。
-- Gradient/saliency：分析不同 state channel 重要性。
-- Encoder activation 或 t-SNE 可视化。
-
-最低可接受产出：
-
-- 文字解释：历史请求通道与部署、资源、预测通道一起输入 DRL encoder。
-- 一个表格：mask 历史通道后的延迟/成本/成功率变化。
-
-### 7.3 解耦框架 vs 端到端（R2-6）
-
-回应思路：
-
-- 承认 MFFD + MDRL 解耦可能带来最优性 gap。
-- 强调解耦降低 action/state 联合优化难度，提高训练稳定性。
-- 用消融或 GNN baseline 说明实际性能 gap 可控。
-- 若不实现端到端模型，将其作为 future work。
-
----
-
-## 8. 时间线
-
-```text
-Day 0-1
-  Phase 0：训练/测试 twitter_largescale 和 sin_largescale。
-
-Day 1
-  决策点：如果排序和指标量级合理，继续 Phase 1。
-
-Day 2-3
-  Phase 1：复现原论文图表；补跑 V 参数实验。
-
-Day 4-5
-  Phase 2.1：Lyapunov 和 Historical Data 消融。
-
-Day 6
-  Phase 2.2：训练开销统计。
-
-Day 7+
-  Phase 3：Alibaba 验证、大规模实验、GNN baseline。
-
-最后一周
-  Phase 4：论文修改、response letter、图表和表格整理。
-```
-
----
-
-## 9. 风险清单
+## 5. 风险清单
 
 | 风险 | 影响 | 缓解措施 |
 |------|------|----------|
-| Phase 0 无法复现论文趋势 | 后续实验失去基准 | 限时 2 天排查 reward、M/M/c、seed、config |
-| V 参数模型互相覆盖 | Fig.10 无效 | 训练前确认模型路径包含 V 或实验名 |
-| Gymnasium seed patch 缺失 | 结果不可复现 | 每次 batch run 前确认 patch |
 | 大规模实验 OOM | R1-1 难完整回应 | 先跑 30 nodes，必要时报告 scalability boundary |
-| DeepScaler 实现耗时 | R2-1 难完整回应 | 先实现简化 GNN baseline，再说明 adaptation |
+| 计时器改造引入 bug | 开销数据不准 | 改完后对比 reward 曲线确认训练无变化 |
+| Gymnasium seed patch 缺失 | 结果不可复现 | 每次 batch run 前确认 patch |
+| 时间不足跳过 P1 | 论文说服力下降 | P0 完成后评估，P1 可降级为简短讨论 |
 | 通信模型改动影响所有指标 | 重跑成本高 | 优先做 sensitivity，不轻易改主实验环境 |
 
 ---
 
-## 10. 输出目录约定
+## 6. 输出目录约定
 
 ```text
-outputs/
-  models/
-    {config}/{algo}/
-    {config}/{algo}_{ablation}/
-  results/
-    {config}/{experiment}/
-      data/{agent}/{metric}.npy
-      overhead.json
-  figures/
-    fig05_load_curve.png
-    fig06_convergence.png
-    fig07_metrics.png
-    fig08_latency_timeslot.png
-    fig09_cost_timeslot.png
-    fig10_v_parameter.png
-    ablation_comparison.png
-    training_overhead.png
-    alibaba_comparison.png
-    scalability.png
+model/
+  {config_name}/{MMDD}/{HHMM}/{algo}/         # 训练输出
+  {config_name}_{ablation}/{MMDD}/{HHMM}/{algo}/  # 消融变体
+
+test_output/
+  {config_name}/
+    data/{agent}/{metric}.npy
+    *.png
+
+draw_pictures/
+  fig1/  # 负载曲线
+  fig2/  # 收敛/结果柱状图
+  fig3/  # 训练曲线
+  fig4/  # 时隙变化
+  fig5/  # 参数敏感性
+  fig6/  # 消融对比
 ```
 
 ---
 
-## 11. 最终交付物
+## 7. 最终交付物
 
 - [ ] 修订论文正文。
 - [ ] Response letter：逐条对应所有 reviewer comments。
 - [ ] 原论文图表重生成。
-- [ ] P0 新增图表/表格：
-  - 消融实验对比（含 w/o Historical Data 回应 R1-2/R2-3）。
-  - 训练开销。
+- [x] Fig.1 负载曲线（三场景）。
+- [x] Fig.3 训练收敛曲线。
+- [x] Fig.4 时隙变化（三场景）。
+- [x] Fig.5 参数敏感性（V + δ）。
+- [x] Fig.6 消融对比（alibaba）。
+- [x] Fig.6 消融对比（alibaba，审稿未要求多数据集）。
+- [ ] Fig.2 全 baseline 对比柱状图（三场景，补全 agents）。
+- [ ] Table 训练开销表（R2-5）。
+- [ ] Table 跨数据集性能汇总（Sin/Twitter/Alibaba）。
+- [ ] Table 消融结果汇总（alibaba × 4 变体）。
 - [ ] P1 图表/表格，如果完成：
-  - Alibaba/Google trace 对比。
-  - 大规模可扩展性。
-  - DeepScaler/GNN baseline。
+  - [ ] DeepScaler 对比图。
+  - [ ] 大规模可扩展性。
+  - [ ] 通信延迟敏感性。
 - [ ] 所有论文结果对应的可复现实验命令日志。

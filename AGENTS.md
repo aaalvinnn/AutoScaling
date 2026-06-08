@@ -8,97 +8,108 @@ Research codebase for the paper *"AutoLFD: A Three-Stage Framework for Microserv
 - **Hardware**: 2× RTX 4080 16GB
 - **No build system** — no `pyproject.toml`, `setup.py`, `pytest`, or lint config.
 
-## Critical: How to switch configuration
+## Critical: Config switching mechanism
 
-The **global `CONFIG`** used by both training and testing is set on **exactly one line**:
+Config is resolved at **import time** via `env/datastruct.py` → `CONFIG = _resolve_config()`. The resolution order:
 
-```
-env/datastruct.py:10   CONFIG = config_alibaba_largescale.EnvConfig()
-```
+1. `--config <name>` CLI arg (parsed via raw `sys.argv` loop **before** any `from env import` — see `main.py:1-6`, `methods/PPO_dnn.py:24-28`)
+2. `AUTOSCALING_CONFIG` env var
+3. Default: `alibaba_largescale`
 
-To switch scenarios, edit that import line. `main.py` and all `methods/*` files read it via `environment.CONFIG`. There is no CLI config selector — always check `datastruct.py` first when something doesn't match.
+**Important**: Any file that does `from env import environment` (or imports `datastruct.py`) triggers config resolution. The `--config` argv parsing **must happen before those imports** or the config will be wrong.
+
+Available configs: `sin_{small,middle,large}scale`, `twitter_{small,middle,large}scale`, `alibaba_largescale` — defined in `CONFIG_REGISTRY` dict in `datastruct.py`.
 
 ## How to run
 
 ```bash
-# Training (uses CONFIG from datastruct.py, trains PPO agent)
-conda run -n tcc python methods/PPO_dnn.py
+# Training (PPO)
+conda run -n tcc python methods/PPO_dnn.py --config twitter_largescale
 
-# Testing / evaluation (uses CONFIG from datastruct.py)
-conda run -n tcc python main.py
+# Training (SAC baseline)
+conda run -n tcc python methods/SAC.py --config twitter_largescale
+
+# Training (DeepScaler GNN baseline)
+conda run -n tcc python methods/DeepScaler.py --config alibaba_largescale
+
+# Testing / evaluation
+conda run -n tcc python main.py --config twitter_largescale
 
 # Unit tests (manual, no framework)
 conda run -n tcc python _unit_test.py
 ```
 
-**Note**: The README says `method/PPO_dnn.py` (singular) but the actual directory is `methods/` (plural).
+Models auto-save to `model/{config_name}/{MMDD}/{HHMM}/{algo}/`. Test loads from hardcoded paths in `main.py` dicts (`LGDRL_MODEL_PATH`, `RLAGENT_MODEL_PATH`, `DEEPSCALER_MODEL_PATH`).
 
 ## Gymnasium patch
 
-The installed `gymnasium` library was modified: `reset_async` distributes a single `int` seed to all parallel envs (instead of generating independent incremented seeds). If you reinstall gymnasium, you lose reproducibility — re-apply the patch from `README.md`.
+The installed `gymnasium` was patched: `reset_async` distributes a single `int` seed identically to all parallel envs (instead of `[seed+i for i in ...]`). Reinstalling gymnasium breaks reproducibility — re-apply from `README.md`.
 
 ## Architecture
 
-| Directory | Purpose |
+| Path | Purpose |
 |---|---|
-| `env/environment.py` | Gymnasium `DataCenterEnvironment` — M/M/c queue model, Lyapunov optimization, communication delay, reward computation |
-| `env/datastruct.py` | Data structures (`MSInstance`, `Node`, `Request`, `TimeSlot`) + **global CONFIG** |
-| `env/loghelper.py` | Test logging, matplotlib visualization, npy data dumps |
-| `env/configs/` | One `EnvConfig` class per scenario (sin/twitter/alibaba × small/middle/large) |
-| `methods/PPO_dnn.py` | Main algorithm: AutoLFD/LGDRL — CNN+DNN dual-input encoder, PPO training loop |
-| `methods/SAC.py` | RL agent baseline (SAC with continuous action, separate from PPO) |
-| `methods/FFD.py` | MFFD initial deployment strategy (First-Fit Decreasing) |
+| `env/environment.py` | Gymnasium `DataCenterEnvironment` — M/M/c queue, Lyapunov optimization, reward computation |
+| `env/datastruct.py` | Data structures + `CONFIG_REGISTRY` + `CONFIG` singleton (resolved at import) |
+| `env/loghelper.py` | Test logging, matplotlib visualization, npy dumps |
+| `env/configs/config_*.py` | One `EnvConfig` class per scenario — all hyperparams live here |
+| `methods/PPO_dnn.py` | AutoLFD/LGDRL main algorithm (CNN+DNN encoder, PPO loop) |
+| `methods/SAC.py` | SAC continuous-action baseline |
+| `methods/DeepScaler.py` | GNN baseline (pure PyTorch, no external GNN lib) |
+| `methods/FFD.py` | MFFD initial deployment |
 | `methods/Predicter.py` | SMA-based arrival-rate predictor |
-| `methods/DeepScaler.py` | GNN baseline **skeleton** — not trained |
-| `methods/HPA.py`, `ProScaling.py`, `GDCScaling.py`, `NoScaling.py`, `RandomScaling.py` | Baseline autoscaling policies |
+| `methods/{HPA,ProScaling,GDCScaling,NoScaling,RandomScaling}.py` | Baseline autoscaling policies |
+| `draw_pictures/fig1-6/` | Paper figure generation scripts (each folder has `draw.py`) |
 | `model/` | Trained checkpoints + TensorBoard logs |
-| `trained_models/` | Historical/baseline model snapshots |
 | `test_output/` | Test results: `{config_name}/data/*.npy` + PNG charts |
 | `data/` | Load traces: `loads-{sin,twitter,alibaba-v2022}.txt` |
-| `draw_pictures/` | Paper figure generation (`fig1/`–`fig5/`) |
-| `docs/` | Paper text, reviewer response letter |
-
-## State and action spaces
-
-**Observation**: `(7, ms_nums, server_node_nums)` — channels: deploy_info, cpus, memories, predicted_lamda, history_lamda (split across 2 channels), time_step_one_hot.
-
-**Action (PPO/tuple)**: `(server_node, microservice, change_amount)` where `change_amount ∈ [-3, 3]`.
-
-**Action (SAC/continuous)**: 3-dim Box, decoded to the same discrete semantics.
-
-## Key parameters per config
-
-- `V` — Lyapunov trade-off coefficient (default 0.1, historically 100: `Lyapunov Optimization` reward). Set via `self.V` in each config class.
-- `delta` — queue truncation threshold.
-- `C` — cost budget.
-- `max_instance_update_num` — maximum instances to add/remove per step (default 3).
-- Training: 20,000 epochs, 16 parallel envs, 288 timesteps per episode (24h / 5min slots).
-
-## Current revision TODO (see `TODO.md` for full plan)
-
-| Priority | Task | Status |
-|---|---|---|
-| P0 | Ablation: w/o Lyapunov, w/o Historical Data, w/o FFD | Not started |
-| P0 | Training overhead stats (wall time, GPU, inference) | Not started |
-| P1 | Alibaba trace full training + testing | Config exists, training not started |
-| P1 | Large-scale (30/50+ nodes) | No configs yet |
-| P1 | DeepScaler GNN baseline training | Code skeleton exists, not trained |
-
-## Model save/load conventions
-
-- Train output: `model/{config_name}/{MMDD}/{HHMM}/{algo}/` (date-time auto-generated)
-- Test loads models from hardcoded paths in `main.py` (`LGDRL_MODEL_PATH`, `RLAGENT_MODEL_PATH` dicts)
-- Checkpoints: `model_dnn_best.pth`, `model_dnn_{epoch}.pth`
-- To test different checkpoints, edit the dict values in `main.py`
 
 ## Ablation flags
 
-Ablation variants are controlled by modifying the environment's reward function or state construction: `w/o Lyapunov` replaces drift-plus-penalty with a weighted sum reward; `w/o Historical Data` removes history channels (3–5) from the observation; `w/o FFD` uses random initial deployment instead of MFFD. These are implemented by branching inside the environment/method code, not via CLI flags.
+Set as boolean attributes on the `EnvConfig` instance. Three flags exist in all large-scale configs:
+
+- `ablation_no_lyapunov` / `ablation_no_lyapunov_strict` — replaces drift-plus-penalty with weighted-sum reward
+- `ablation_no_history` — removes history channels from observation
+- `ablation_no_ffd` — random initial deployment instead of MFFD
+
+**Usage pattern** (from `draw_pictures/fig6/draw.py`):
+```python
+def make_config(**flags):
+    c = config_alibaba_largescale.EnvConfig()
+    for k, v in flags.items():
+        setattr(c, k, v)
+    return c
+```
+
+The environment reads these via `getattr(env_config, 'ablation_no_lyapunov_strict', False)` — so extra flags (like `_strict`) can be set without declaring them in the config class.
+
+## Model save/load conventions
+
+- Train output: `model/{config_name}/{MMDD}/{HHMM}/{algo}/` (auto-generated date-time dirs)
+- Checkpoints: `model_dnn_best.pth`, `model_dnn_{epoch}.pth`
+- Test loads from dicts in `main.py` (lines 91-119) — edit dict values to switch checkpoints
+- Ablation models saved under `model/{config_name}_{ablation}/` (e.g., `model/alibaba_largescale_no_lyapunov_strict/`)
+
+## main.py testing setup
+
+The active test configuration is at the bottom of `main.py` (lines 179-199). Previous test setups (V params, delta params, specific agents) are commented out above it. To change which agents are tested, edit the bottom section — you'll see the pattern of creating envs, loading agents, and constructing a `LogHelper`.
 
 ## Gotchas
 
-- **Seed reproducibility**: `seed_all()` must be called before training. The config seed (1037) is the canonical seed.
-- **State mutation**: `get_state()` returns a deep copy; the observation is reconstructed each step from `self.state` dict.
-- **Queue stability**: `self.Qt` (virtual queue backlog) persists across reset in training loops — reset sets it to 0 only in `_reset_datastruct`.
-- **Chinese comments**: Most comments are in Chinese.
-- **Broken imports**: `_unit_test.py` imports `from env.config import EnvConfig` which doesn't exist (the directory is `env/configs/` not `env/config/`) — that import path only works because of `sys.path` hacks in `__init__.py` files, or it may fail.
+- **Import order is load-bearing**: `--config` argv parsing happens before `from env import environment`. If you add new imports above the argv loop, config resolution will use the wrong scenario.
+- **Mixed import paths**: `datastruct.py` uses both `from configs import ...` (relative) and `from env.configs import ...` (absolute). Both work due to `sys.path.append` in `__init__.py` files. Don't clean these up — it's fragile.
+- **`_unit_test.py` broken import**: Line 2 does `from env.config import EnvConfig` — the directory is `env/configs/` not `env/config/`. May work via `sys.path` hacks or may fail depending on working directory.
+- **Seed reproducibility**: `seed_all(1037)` must be called before training. The config seed is the canonical seed.
+- **Queue stability**: `self.Qt` (virtual queue backlog) persists across `reset()` in training — `_reset_datastruct` zeros it but training loops manage it separately.
+- **Chinese comments**: Most inline comments are in Chinese.
+- **draw_pictures scripts are self-contained**: Each `fig*/draw.py` re-imports and re-runs the environment. They don't depend on `main.py` test output — they load model checkpoints directly and run fresh rollouts.
+
+## Current revision status
+
+See `TODO.md` for the full task list. Summary as of 2026-06-06:
+
+- ✅ Alibaba trace: config, PPO/SAC/DeepScaler training, testing, all figures
+- ✅ Ablation (alibaba only): w/o Lyapunov, w/o History, w/o FFD — models trained, fig6 generated
+- ✅ Fig.1–6 all generated (three scenarios)
+- ❌ Training overhead stats (R2-5) — need timer instrumentation
+- ❌ Full baseline comparison across all agents/scenarios
