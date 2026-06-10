@@ -1,0 +1,49 @@
+# Fig.3 — 训练收敛曲线
+
+## 图片说明
+
+本图展示 AutoLFD（PPO）在三种负载场景下的训练收敛过程，以 epoch-reward 曲线呈现，用于论文 5.2 节 Algorithm Convergence。展示算法在不同负载模式下的收敛速度和稳定性。
+
+## 生成文件
+
+| 文件 | 内容 |
+|------|------|
+| `Train.pdf` | 三条训练收敛曲线合并在一张图中（Twitter + Sin + Alibaba） |
+
+## 绘图脚本
+
+- `draw.py` — 从 TensorBoard 日志和 JSON 文件中读取训练 reward 数据
+
+## 数据来源
+
+| 场景 | 数据来源 | 说明 |
+|------|----------|------|
+| Twitter | `data/0603/Twitter.json` | 历史 JSON 格式训练日志 |
+| Sin | `data/0603/Sin-1.json` + `Sin-2.json` | 两段拼接（共 20000 epoch） |
+| Alibaba | `model/alibaba_largescale/0602/1440/PPO_dnn/` | TensorBoard EventAccumulator 读取 |
+
+## 配色方案
+
+- Twitter: `#82B0D2`（浅蓝）
+- Sin: `#8ECFC9`（浅绿）
+- Alibaba: `#FA7F6F`（浅橙红）
+
+## 其他文件
+
+- `data/` — 训练日志原始数据（JSON 格式）
+- `DeepScaler_*.png` — DeepScaler baseline 的收敛曲线调试图（非论文用图）
+
+## 相比原稿（Major Revision 前）的变化
+
+- **新增 Alibaba 收敛曲线**：原稿仅有 Sin + Twitter 的训练曲线，修订后新增 Alibaba 场景的收敛展示
+
+## 回应审稿意见
+
+本图回应两项审稿意见：
+
+- **R2-5**：审稿人指出 "The paper does not discuss the training overhead or convergence time of the MDRL approach"，要求补充训练收敛和开销分析。Fig.3 直接展示三场景下的 epoch-reward 收敛曲线，直观呈现收敛速度和稳定性；配套的训练开销 Table （Section 5.2）进一步提供 wall time、GPU 显存、推理延迟等定量数据。
+- **R2-4**：新增 Alibaba 场景的收敛曲线，扩展数据集覆盖范围。
+
+## Response Letter 草稿
+
+感谢审稿人关于训练收敛和计算开销的意见。为此，我们在 Figure 3 中新增了 Alibaba trace 的训练收敛曲线，与原有的 Twitter 和正弦 trace 合并展示。epoch-reward 曲线表明，AutoLFD 在三种负载类型上均稳定收敛，其中负载变化更复杂的 Alibaba trace 需要更多 epoch 才能收敛，这是其更高负载变异性的自然结果。针对训练开销（R2-5），我们以 twitter_largescale 场景为代表进行了详细测量：在 2× RTX 4080 环境下，使用 16 个并行环境训练 10,000 iterations，总挂钟时间约 17.6 小时，平均每秒处理 1,453 步（SPS），模型参数量为 657,948（2.51 MB）；推理阶段单步决策延迟均值 1.72 ms，中位数 1.25 ms（CPU 推理），对边缘在线部署而言完全可接受。完整数据见 training_overhead.md。
