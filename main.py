@@ -11,6 +11,7 @@ from env import environment, loghelper
 from methods import NoScaling, RandomScaling, GDCScaling, PPO_dnn, ProScaling, SAC, HPA, DeepScaler
 from methods import Predicter
 import random
+import time
 import numpy as np
 from tqdm import tqdm
 
@@ -24,17 +25,27 @@ class TestHelper(object):
         self.envs = envs
         self.logger = logger
 
-    def test(self, total_steps=288):
+    def test(self, total_steps=288, measure_latency=True):
         total_rewards = [0 for _ in self.agents]
         dones = [False for _ in self.agents]
         states = [env.reset()[0] for env in self.envs]
         infos = [{} for _ in self.agents]
 
+        # ── Inference latency tracking ──
+        if measure_latency:
+            latency_records = {name: [] for name in self.logger.agents_name}
+
         with tqdm(total=total_steps, desc="Epoch Progress", unit="step") as pbar:
             while not all(dones):
                 for i, (agent, env) in enumerate(zip(self.agents, self.envs)):
                     if not dones[i]:  # Skip if this agent's environment is already done
-                        action = agent.get_action(states[i])
+                        if measure_latency:
+                            t0 = time.perf_counter()
+                            action = agent.get_action(states[i])
+                            t1 = time.perf_counter()
+                            latency_records[self.logger.agents_name[i]].append((t1 - t0) * 1000)  # ms
+                        else:
+                            action = agent.get_action(states[i])
                         # # debug
                         # if env.timeslot.get_now() in (180, 182, 184):
                         #     action = (random.randint(0, 4), random.randint(0, 4), 0)
@@ -53,6 +64,27 @@ class TestHelper(object):
         # Log total rewards for each agent
         for agent, total_reward in zip(self.logger.agents_name, total_rewards):
             print(f"Agent {agent} total_reward: {total_reward}")
+
+        # ── Print inference latency statistics ──
+        if measure_latency:
+            print("\n" + "=" * 80)
+            print("INFERENCE LATENCY STATISTICS (per decision step)")
+            print("=" * 80)
+            header = f"{'Agent':<16} {'Steps':>6} {'Mean (ms)':>10} {'Std (ms)':>10} {'Min (ms)':>10} {'Max (ms)':>10} {'Median (ms)':>12} {'P95 (ms)':>10}"
+            print(header)
+            print("-" * 80)
+            for name in self.logger.agents_name:
+                lats = np.array(latency_records[name])
+                if len(lats) > 0:
+                    print(f"{name:<16} {len(lats):>6} {np.mean(lats):>10.3f} {np.std(lats):>10.3f} "
+                          f"{np.min(lats):>10.3f} {np.max(lats):>10.3f} {np.median(lats):>12.3f} "
+                          f"{np.percentile(lats, 95):>10.3f}")
+            print("=" * 80)
+
+            latency_save_path = os.path.join("test_output", environment.CONFIG.config_name, "latency.npy")
+            os.makedirs(os.path.dirname(latency_save_path), exist_ok=True)
+            np.save(latency_save_path, latency_records, allow_pickle=True)
+            print(f"Latency data saved to {latency_save_path}")
 
         self.logger.visualize()
         self.logger.save_data()

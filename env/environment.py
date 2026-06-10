@@ -176,7 +176,10 @@ class DataCenterEnvironment(gym.Env):
         # 生成对称的带宽值
         for i in range(n_node_server):
             for j in range(i + 1, n_node_server):
-                bandwidth = random.randint(self.config.node2node_min_bandwidth, self.config.node2node_max_bandwidth)
+                if self.config.node2node_min_bandwidth == self.config.node2node_max_bandwidth:
+                    bandwidth = self.config.node2node_min_bandwidth
+                else:
+                    bandwidth = random.randint(self.config.node2node_min_bandwidth, self.config.node2node_max_bandwidth)
                 bandwidth_graph[i][j] = bandwidth
                 bandwidth_graph[j][i] = bandwidth
 
