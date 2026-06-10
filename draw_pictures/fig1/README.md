@@ -22,11 +22,26 @@
 | Sin | `data/loads-sin.txt` | 正弦波 + 随机扰动，周期性负载 |
 | Alibaba | `data/loads-alibaba-v2022.txt` | Alibaba Cluster Trace v2022，大规模真实负载 |
 
+### Alibaba 数据集引用
+
+本项目使用的 Alibaba 负载数据来自 **Alibaba Cluster Trace Program** 中的 `cluster-trace-microservices-v2022` 数据集。
+
+**引用格式：**
+
+> Shutian Luo, Huanle Xu, Chengzhi Lu, Kejiang Ye, Guoyao Xu, Liping Zhang, Yu Ding, Jian He, Chengzhong Xu. "Characterizing Microservice Dependency and Performance: Alibaba Trace Analysis." In *ACM Symposium on Cloud Computing (SoCC '21)*, 2021.
+
+**数据来源：**
+
+- GitHub 仓库：https://github.com/alibaba/clusterdata
+- 具体数据集：`cluster-trace-microservices-v2022`
+
+该数据集由阿里巴巴集团发布，包含来自生产环境的真实微服务调用 trace，广泛用于云原生系统研究。
+
 ## 配色方案
 
-- Twitter: `#82B0D2`（浅蓝）
-- Sin: `#8ECFC9`（浅绿）
-- Alibaba: `#FA7F6F`（浅橙红）
+- Twitter: `#376eae`（深蓝）
+- Sin: `#449945`（深绿）
+- Alibaba: `#c22f2f`（深红）
 
 ## 相比原稿（Major Revision 前）的变化
 

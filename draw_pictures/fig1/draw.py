@@ -17,9 +17,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(current_dir))
 
 datasets = [
-    ("Twitter", os.path.join(ROOT, "data/loads-twitter.txt"), "#82B0D2"),
-    ("Sin",     os.path.join(ROOT, "data/loads-sin.txt"),     "#8ECFC9"),
-    ("Alibaba", os.path.join(ROOT, "data/loads-alibaba-v2022.txt"), "#FA7F6F"),
+    ("Twitter", os.path.join(ROOT, "data/loads-twitter.txt"), "#376eae"),
+    ("Sin",     os.path.join(ROOT, "data/loads-sin.txt"),     "#449945"),
+    ("Alibaba", os.path.join(ROOT, "data/loads-alibaba-v2022.txt"), "#c22f2f"),
 ]
 
 fig, ax = plt.subplots(figsize=(14, 4))
@@ -36,6 +36,6 @@ ax.grid(True, zorder=grid_zorder)
 plt.legend(frameon=True, fontsize=lengend_fontsize, loc='upper left')
 plt.tight_layout()
 
-save_path = os.path.join(current_dir, "loads-alibaba.pdf")
+save_path = os.path.join(current_dir, "loads.pdf")
 plt.savefig(save_path, format="pdf")
 print(f"Saved: {save_path}")

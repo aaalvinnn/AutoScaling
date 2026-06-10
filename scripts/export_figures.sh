@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DRAW_DIR="$PROJECT_ROOT/draw_pictures"
 RELEASE_DIR="$PROJECT_ROOT/release"
 ZIP_NAME="$RELEASE_DIR/figures.zip"

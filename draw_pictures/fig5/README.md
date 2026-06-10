@@ -13,8 +13,6 @@
 |------|------|
 | `Latency-twitter-Large Scale-V.pdf` | Twitter 场景不同 V 值下的逐时隙延迟对比 |
 | `Cost-twitter-Large Scale-V.pdf` | Twitter 场景不同 V 值下的逐时隙开销对比 |
-| `Latency-sin-Large Scale-delta.pdf` | Sin 场景不同 δ 值下的逐时隙延迟对比 |
-| `Cost-sin-Large Scale-delta.pdf` | Sin 场景不同 δ 值下的逐时隙开销对比 |
 
 ## 绘图脚本
 
