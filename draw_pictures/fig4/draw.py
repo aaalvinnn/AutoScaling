@@ -12,8 +12,8 @@ grid_zorder = 0
 alpha = 1
 markersize = 2.5
 
-# dataset = "sin"
-# dataset = "twitter"
+# dataset = "alibaba"
+# dataset = "alibaba"
 dataset = "alibaba"
 
 current_dir = os.path.dirname(os.path.abspath(__file__))

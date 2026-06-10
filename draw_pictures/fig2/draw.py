@@ -9,7 +9,7 @@ label_size = 24
 bar_width = 0.12
 bar_zorder = 3
 
-# DATASET = "sin"
+# DATASET = "alibaba"
 DATASET = "alibaba"
 # DATASET = "alibaba"
 

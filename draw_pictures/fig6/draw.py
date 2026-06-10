@@ -1,5 +1,5 @@
 """
-Ablation study — per-timeslot latency, cost, success rate (alibaba_largescale)
+Ablation study — per-timeslot line charts + mean bar chart (alibaba_largescale)
 """
 import matplotlib.pyplot as plt
 import numpy as np
@@ -69,7 +69,6 @@ for idx, (name, cfg, model_path) in enumerate(configs):
     }
     print(f"{name}: collected {len(t_all_list)} timesteps")
 
-# Save npy data
 file_names = {
     "Full AutoLFD": "full",
     "w/o Lyapunov": "no_lyapunov",
@@ -90,7 +89,6 @@ def draw_latency():
         arr = all_data[name]["t_all"]
         plt.plot(arr, label=labels_zh[i], color=colors[i], linewidth=line_width,
                  zorder=line_zorder, linestyle='--', marker='o', markersize=markersize)
-
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Latency', fontsize=fontsize)
@@ -108,7 +106,6 @@ def draw_cost():
     for i, (name, cfg, _) in enumerate(configs):
         arr = all_data[name]["cost"]
         plt.plot(arr, label=labels_zh[i], color=colors[i], linewidth=line_width, zorder=line_zorder)
-
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize)
@@ -127,7 +124,6 @@ def draw_rsr():
         arr = all_data[name]["rsr"]
         plt.plot(arr, label=labels_zh[i], color=colors[i], linewidth=line_width,
                  zorder=line_zorder, linestyle='--', marker='o', markersize=markersize)
-
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Success Rate', fontsize=fontsize)
@@ -140,7 +136,45 @@ def draw_rsr():
     print("Saved SuccessRate-ablation-alibaba.pdf")
 
 
+def draw_bar():
+    short_labels = ["Full", "no-Lya", "no-Hist", "no-FFD(r)", "Full+noFFD"]
+    metrics = [
+        ("cost", "Cost", 0),
+        ("rsr", "Success Rate", 1),
+        ("t_all", "Latency", 2),
+    ]
+    n_variants = len(configs)
+    x = np.arange(n_variants)
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    for metric_key, metric_label, col in metrics:
+        ax = axes[col]
+        means = [np.mean(all_data[name][metric_key]) for name, _, _ in configs]
+        bars = ax.bar(x, means, 0.6, color=colors, edgecolor='white', linewidth=0.5, zorder=3)
+
+        for bar, val in zip(bars, means):
+            if metric_key == "rsr":
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
+                        f'{val:.1%}', ha='center', va='bottom', fontsize=14)
+            else:
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                        f'{val:.1f}', ha='center', va='bottom', fontsize=14)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(short_labels, fontsize=12, rotation=15)
+        ax.set_ylabel(metric_label, fontsize=fontsize)
+        ax.grid(True, axis='y', zorder=0, alpha=0.5)
+        if metric_key == "rsr":
+            ax.set_ylim(0, 1.1)
+
+    plt.tight_layout()
+    for fmt in ["pdf", "png"]:
+        plt.savefig(os.path.join(current_dir, f"Bar-ablation-alibaba.{fmt}"), format=fmt, dpi=150)
+    print("Saved Bar-ablation-alibaba.pdf")
+
+
 if __name__ == '__main__':
     draw_latency()
     draw_cost()
     draw_rsr()
+    draw_bar()
