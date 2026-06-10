@@ -37,7 +37,7 @@ else:
     data_path = twitter_paths
 
 scale = "Large Scale"
-colors = ["#449945", "#f8c91c", "#376eae", "#c22f2f", "#8E6EC8"]
+colors = ["#449945", "#f8c91c", "#376eae", "#8E6EC8", "#c22f2f"]
 linestyles = ['--', '--', '--', '--', '-.']
 
 def draw_latency():

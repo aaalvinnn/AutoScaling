@@ -1,7 +1,7 @@
 # AutoLFD Major Revision 修订与实验计划
 
 > **截止日期**：2026-07-02
-> **最后更新**：2026-06-08
+> **最后更新**：2026-06-10
 > **目标**：把论文复现实验、Major Revision 新增实验、审稿意见回应整理成一份可执行 TODO。
 > **硬件**：2 x RTX 4080 16GB
 > **环境**：conda env `tcc`，Python 3.10，PyTorch 2.5.1，Gymnasium 1.0.0
@@ -16,10 +16,10 @@
 | R1-2 | 需要说明 DRL 如何利用历史请求数据 `R_his` 做隐式预测 | P2 | 消融「w/o Historical Data」已量化 + 文字解释 | ✅ 消融完成（alibaba），📝 文字未写 |
 | R1-3 | 需要消融实验量化 Lyapunov 优化贡献 | P0 | AutoLFD vs w/o Lyapunov | ✅ 消融完成（alibaba），审稿未要求多数据集 |
 | R2-1 | 缺少 GNN/MARL 等前沿方法对比 | P1 | DeepScaler/GNN baseline | ✅ 训练完成，🔄 需性能对比图 |
-| R2-2 | 固定通信延迟 `T0` 过于简化 | P2 | 可变通信模型或敏感性分析 | ❌ 未开始 |
+| R2-2 | 固定通信延迟 `T0` 过于简化 | P2 | 可变通信模型或敏感性分析 | ✅ fig7 已完成（twitter_largescale，T=1~5 敏感性分析） |
 | R2-3 | 预测机制未充分评估 | P0 | 消融实验「w/o Historical Data」 | ✅ 同 R1-2 |
 | R2-4 | 数据集单一，只有 synthetic + Twitter | P1 | Alibaba trace 验证 | ✅ 训练+测试+图表完成 |
-| R2-5 | 未讨论 MDRL 训练开销和收敛时间 | P0 | 训练/推理开销表 | ❌ 未开始（需加计时代码） |
+| R2-5 | 未讨论 MDRL 训练开销和收敛时间 | P0 | 训练/推理开销表 | 🔄 LGDRL 开销已提取（twitter_largescale，见 fig3/training_overhead.md），缺 SAC/DeepScaler 对比 |
 | R2-6 | MFFD + MDRL 解耦可能导致次优 | P2 | 论文讨论；消融 w/o FFD 已量化 | ✅ 消融完成（alibaba），📝 文字未写 |
 
 优先级说明：
@@ -97,6 +97,8 @@
 | `twitter_smallscale` | `model/twitter_smallscale/*/SAC/`（0304-0311 共 8 次运行） | ✅ 多次训练完成 |
 
 #### DeepScaler (GNN) — GNN baseline
+
+> **Reference:** DeepScaler: Holistic Autoscaling for Microservices Based on Spatiotemporal GNN with Adaptive Graph Learning. ASE 2023. DOI: 10.1109/ASE56229.2023.00038
 
 | 配置 | 目录 | 状态 | 备注 |
 |------|------|------|------|
@@ -209,7 +211,9 @@
 | Fig.4 时隙变化 | `fig4/` | 延迟/成本时隙图（**sin + twitter + alibaba** Large Scale） | ✅ 三场景完成 |
 | Fig.5 参数敏感性 | `fig5/` | V 参数（Cost/Latency vs V），δ 参数（`delta.py`） | ✅ 完成（仅 sin/twitter） |
 | **Fig.6 消融实验** | `fig6/` | **消融对比图（alibaba）**: Latency/Cost/SuccessRate，5 变体 | ✅ **新增完成** |
+| **Fig.7 通信延迟敏感性** | `fig7/` | **通信延迟敏感性（twitter_largescale）**: T=1~5 扫描 | ✅ **新增完成** |
 | 数据导出 | `export_excel.py` | 批量导出实验数据到 Excel | ✅ |
+| README 标准化 | `fig1-7/README.md` | 各图 README 含审稿意见映射 + 中文 response letter 草稿 | ✅ 完成 |
 
 ### 1.7 消融策略说明
 
@@ -239,6 +243,9 @@
 - [x] **Fig.4 时隙变化**：三场景 Latency + Cost
 - [x] **Fig.5 参数敏感性**：V 参数 + δ 参数
 - [x] **Fig.6 消融对比**：alibaba 场景 5 变体（Latency/Cost/SuccessRate）
+- [x] **Fig.7 通信延迟敏感性**：twitter_largescale T=1~5 扫描
+- [x] **训练开销统计（LGDRL）**：twitter_largescale 挂钟时间/推理延迟（见 fig3/training_overhead.md）
+- [x] **各图 README 标准化**：fig1-7 均含审稿意见映射 + 中文 response letter 草稿
 - [x] Twitter large-scale V 参数实验（V=0.1~1000，多版本覆盖）
 - [x] Twitter large-scale δ 参数实验（δ=1,2,3）
 - [x] N_change 变体实验
@@ -253,7 +260,7 @@
 
 | 章节 | 任务 | 回应的审稿意见 | 预计工作量 | 当前进度 |
 |------|------|---------------|-----------|----------|
-| 5.2 | **训练开销统计**（wall time / GPU / inference） | R2-5 | 中 | ❌ 需在 PPO/SAC/DeepScaler 加计时器，重跑一次训练 |
+| 5.2 | **训练开销统计**（wall time / GPU / inference） | R2-5 | 中 | 🔄 LGDRL twitter_largescale 已完成（见 fig3/training_overhead.md），缺 SAC/DeepScaler 对比 |
 | 5.4 | **消融结果汇总表 (Table)** — 仅 alibaba 场景 | R1-3 | 低 | ❌ fig6 有图但缺论文级数值表（均值±std） |
 | 5.3 | **NoScaling/Random/SAC baseline 补测**（twitter + sin + alibaba） | — | 低 | ❌ 三个场景均缺 |
 | 5.3 | **Alibaba 全 baseline 对比图**（HPA/ProScaling/NoScaling/Random/SAC/LGDRL） | R2-4 | 低 | ❌ 缺除 LGDRL 外的 baseline 对比 |
@@ -272,7 +279,7 @@
 
 | 章节 | 任务 | 回应的审稿意见 | 当前进度 |
 |------|------|---------------|----------|
-| 5.5.3 | 通信延迟敏感性（测试阶段 T0 变化） | R2-2 | ❌ 未开始 |
+| 5.5.3 | 通信延迟敏感性（测试阶段 T0 变化） | R2-2 | ✅ fig7 已完成（twitter_largescale，T=1~5） |
 | 7.2 | 历史数据利用文字分析 | R1-2 | 🔄 消融数据已有（alibaba），需撰写文字 |
 | 7.3 | MFFD+MDRL 解耦讨论 | R2-6 | 🔄 消融数据已有（alibaba w/o FFD），需撰写文字 |
 
@@ -287,7 +294,7 @@ Phase 0：最小复现验证          ✅ 已完成
   -> Phase 1：复现原论文图表     ✅ 已完成（含 Alibaba 扩展）
   -> Phase 2：P0 Major Revision  🔄 进行中（消融 alibaba ✅，剩余：开销统计 + baseline 补测）
   -> Phase 3：P1 扩展实验        ⬜ 部分进行中（DeepScaler 已训练，缺对比图）
-  -> Phase 4：P2 分析与论文回应  ⬜ 未开始
+  -> Phase 4：P2 分析与论文回应  🔄 部分完成（R2-2 fig7 ✅，各图 README response letter 草稿已写）
 ```
 
 ---
@@ -299,10 +306,10 @@ Phase 0：最小复现验证          ✅ 已完成
 | 章节 | 对应原论文 | 审稿意见 | 优先级 | 状态 | 产出 |
 |------|-----------|----------|--------|------|------|
 | 5.1 Experiment Settings | 5.1（更新） | — | — | ✅ 完成 | Alibaba 场景 + 参数表 + Fig.1 负载曲线（三合一） |
-| 5.2 Algorithm Convergence & Overhead | 5.2（Fig.6） | R2-5 | **P0** | 🔄 图已完成，开销表未做 | Fig.3 收敛曲线 ✅ + Table 训练开销 ❌ |
+| 5.2 Algorithm Convergence & Overhead | 5.2（Fig.6） | R2-5 | **P0** | 🔄 LGDRL 完成，缺 SAC/DeepScaler | Fig.3 收敛曲线 ✅ + training_overhead.md（LGDRL twitter） 🔄 |
 | 5.3 Overall Performance | 5.2（Fig.7-9） | R2-4 | **P0** | 🔄 部分完成 | Fig.2/4 三场景 ✅，缺全 baseline 对比 |
 | 5.4 Ablation Study | **新增** | R1-2, R1-3, R2-3 | **P0** | ✅ alibaba 完成 | Fig.6 alibaba ✅ + Table 需整理 |
-| 5.5 Parameter Sensitivity Analysis | 5.2（Fig.10）**新增** | R1-1, R2-2 | **P1** | 🔄 部分完成 | Fig.5 V/δ ✅（sin/twitter），缺 alibaba |
+| 5.5 Parameter Sensitivity Analysis | 5.2（Fig.10）**新增** | R1-1, R2-2（✅ fig7 完成） | **P1** | 🔄 部分完成 | Fig.5 V/δ ✅（sin/twitter），Fig.7 通信延迟 ✅，缺 alibaba |
 
 > **注**：R1-2（历史数据利用）和 R2-3（预测机制）统一通过消融实验中的「w/o Historical Data」变体回应——Alibaba 消融已完成，直接量化了历史到达率通道的贡献。
 
@@ -438,8 +445,8 @@ Phase 0：最小复现验证          ✅ 已完成
 | Fig.4 (更新) | 三场景延迟/成本时隙变化 | 5.3 | — | ✅ |
 | Fig.5 (更新) | V 参数 + δ 参数敏感性 | 5.5.1 | — | 🔄 缺 alibaba |
 | **Fig.6 (新增)** | 消融对比图（Latency/Cost/SuccessRate, alibaba） | 5.4 | P0 | ✅ alibaba 完成 |
-| Fig.7 (新增) | DeepScaler 对比 | 5.3 | P1 | ❌ 需测试 + 绘图 |
-| **Table (新增)** | 训练开销表 | 5.2 | P0 | ❌ |
+| Fig.7 (新增) | 通信延迟敏感性（twitter_largescale, T=1~5） | 5.5.3 | P2 | ✅ 完成 |
+| **Table (新增)** | 训练开销表 | 5.2 | P0 | 🔄 LGDRL twitter 完成，缺 SAC/DeepScaler |
 | **Table (新增)** | 跨数据集性能汇总 | 5.3 | P0 | ❌ |
 | **Table (新增)** | 消融结果汇总（alibaba × 4 变体） | 5.4 | P0 | 🔄 alibaba 数据有，需整理成表 |
 | **Table (新增)** | 可扩展性汇总 | 5.5.2 | P1 | ❌ |
@@ -452,9 +459,7 @@ Phase 0：最小复现验证          ✅ 已完成
 
 | 任务 | GPU 时间 | 人工时间 | 并行策略 |
 |------|---------|---------|---------|
-| 训练开销统计（加计时重跑） | 2-4h（选代表性场景） | 中（改代码） | 改完代码后单次训练即可 |
-| 全 baseline 补测（3 场景） | 0（无需 GPU 训练） | 低（跑测试） | CPU 即可 |
-| 消融/性能汇总 Table | 0 | 低（整理数据） | — |
+| 训练开销统计（加计时重跑） | 2-4h（选代表性场景） | 中（改代码） | 改完代码后单次
 
 **P0 总 GPU 时间**：约 2-4h
 **P0 总人工时间**：约 2-3 天
@@ -532,6 +537,7 @@ draw_pictures/
   fig4/  # 时隙变化
   fig5/  # 参数敏感性
   fig6/  # 消融对比
+  fig7/  # 通信延迟敏感性
 ```
 
 ---
@@ -546,13 +552,13 @@ draw_pictures/
 - [x] Fig.4 时隙变化（三场景）。
 - [x] Fig.5 参数敏感性（V + δ）。
 - [x] Fig.6 消融对比（alibaba）。
-- [x] Fig.6 消融对比（alibaba，审稿未要求多数据集）。
+- [x] Fig.7 通信延迟敏感性（twitter_largescale, T=1~5）。
 - [ ] Fig.2 全 baseline 对比柱状图（三场景，补全 agents）。
-- [ ] Table 训练开销表（R2-5）。
+- [ ] Table 训练开销表（R2-5，🔄 LGDRL twitter 已完成）。
 - [ ] Table 跨数据集性能汇总（Sin/Twitter/Alibaba）。
 - [ ] Table 消融结果汇总（alibaba × 4 变体）。
 - [ ] P1 图表/表格，如果完成：
   - [ ] DeepScaler 对比图。
   - [ ] 大规模可扩展性。
-  - [ ] 通信延迟敏感性。
+  - [x] 通信延迟敏感性（fig7）。
 - [ ] 所有论文结果对应的可复现实验命令日志。
