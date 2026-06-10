@@ -484,9 +484,9 @@ class DeepScalerAgent:
 # 7. Training function
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def make_env(env_id, config):
+def make_env(env_id, config, agent_type="DeepScaler"):
     def thunk():
-        return environment.DataCenterEnvironment(env_id, config, True, agent_type="DeepScaler")
+        return environment.DataCenterEnvironment(env_id, config, True, agent_type=agent_type)
     return thunk
 
 
@@ -534,7 +534,7 @@ def save_config(save_path, config):
     shutil.copy(config_path, config_dir)
 
 
-def train(config, agent: DeepScalerAgent):
+def train(config, agent: DeepScalerAgent, agent_type: str = "DeepScaler", save_every: int = 250):
     save_path = os.path.join(
         config.model_path, config.config_name,
         datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "DeepScaler"
@@ -543,7 +543,7 @@ def train(config, agent: DeepScalerAgent):
     save_config(save_path, config)
 
     envs = gym.vector.AsyncVectorEnv(
-        [make_env(i, config) for i in range(config.num_envs)]
+        [make_env(i, config, agent_type=agent_type) for i in range(config.num_envs)]
     )
 
     # reward scaling
@@ -623,7 +623,7 @@ def train(config, agent: DeepScalerAgent):
                 best_y = np.mean(total_y)
                 agent.save(save_path, "model_best.pth")
                 agent.save(save_path, "model.pth")
-            if iteration % 5000 == 0:
+            if iteration % save_every == 0:
                 agent.save(save_path, f"model_{iteration}.pth")
 
             with torch.no_grad():
@@ -735,6 +735,9 @@ def parse_args():
     parser.add_argument("--device", help="CUDA device override")
     parser.add_argument("--seed", type=int, help="Random seed override")
     parser.add_argument("--resume", help="Resume from checkpoint")
+    parser.add_argument("--num-iterations", type=int, help="Override num_iterations")
+    parser.add_argument("--lyapunov", action="store_true", help="Use Lyapunov reward (-y) instead of weighted-sum")
+    parser.add_argument("--save-every", type=int, default=250, help="Save checkpoint every N iterations (default 250)")
     return parser.parse_args()
 
 
@@ -750,6 +753,8 @@ if __name__ == "__main__":
         config.device = args.device
     if args.seed is not None:
         config.seed = args.seed
+    if args.num_iterations is not None:
+        config.num_iterations = args.num_iterations
 
     seed_all(config.seed)
 
@@ -765,4 +770,7 @@ if __name__ == "__main__":
     if args.resume:
         agent.load(args.resume)
 
-    train(config, agent)
+    # choose agent_type string for reward function
+    env_agent_type = "DeepScaler-Lyapunov" if args.lyapunov else "DeepScaler"
+
+    train(config, agent, agent_type=env_agent_type, save_every=args.save_every)

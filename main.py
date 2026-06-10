@@ -111,11 +111,11 @@ RLAGENT_MODEL_PATH = {
 DEEPSCALER_MODEL_PATH = {
     "sin_smallscale": "",
     "sin_middlescale": "",
-    "sin_largescale": "model/sin_largescale/0607/1653/DeepScaler/model_best.pth",
+    "sin_largescale": "model/sin_largescale/0609/2049/DeepScaler/model_1000.pth",
     "twitter_smallscale": "",
     "twitter_middlescale": "",
-    "twitter_largescale": "model/twitter_largescale/0607/1653/DeepScaler/model_best.pth",
-    "alibaba_largescale": "model/alibaba_largescale/0607/1653/DeepScaler/model_best.pth"
+    "twitter_largescale": "model/twitter_largescale/0609/2049/DeepScaler/model_1000.pth",
+    "alibaba_largescale": "model/alibaba_largescale/0609/2049/DeepScaler/model_best.pth"
 }
 
 if __name__ == '__main__':

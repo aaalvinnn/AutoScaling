@@ -54,7 +54,7 @@ class DataCenterEnvironment(gym.Env):
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(7, self.ms_nums, self.server_node_nums), dtype=np.float32)
         if self.config.is_las:
             self.action_space = gym.spaces.Discrete(self.server_node_nums * self.ms_nums * (self.max_instance_update_num * 2 + 1))
-        elif self.agent_type in ("PPO", "DeepScaler"):
+        elif self.agent_type in ("PPO", "DeepScaler", "DeepScaler-Lyapunov"):
             self.action_space = gym.spaces.Tuple((
                 gym.spaces.Discrete(self.server_node_nums),
                 gym.spaces.Discrete(self.ms_nums),
@@ -630,6 +630,8 @@ class DataCenterEnvironment(gym.Env):
             reward = -self.config.y_weight_train*cost + request_success_rate*20
         elif self.agent_type == "DeepScaler":
             reward = -self.config.y_weight_train*cost + request_success_rate*20
+        elif self.agent_type == "DeepScaler-Lyapunov":
+            reward = -y
         # print(reward)
 
         # # debug
