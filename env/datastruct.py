@@ -3,6 +3,7 @@ import numpy as np
 import random
 from configs import config_sin_smallscale, config_sin_middlescale, config_sin_largescale
 from env.configs import config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
+from env.configs import config_twitter_xlargescale
 from env.configs import config_alibaba_largescale
 
 
@@ -13,6 +14,7 @@ CONFIG_REGISTRY = {
     "twitter_smallscale": config_twitter_smallscale.EnvConfig,
     "twitter_middlescale": config_twitter_middlescale.EnvConfig,
     "twitter_largescale": config_twitter_largescale.EnvConfig,
+    "twitter_xlargescale": config_twitter_xlargescale.EnvConfig,
     "alibaba_largescale": config_alibaba_largescale.EnvConfig,
 }
 

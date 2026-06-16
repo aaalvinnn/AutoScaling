@@ -4,7 +4,7 @@ Research codebase for the paper *"AutoLFD: A Three-Stage Framework for Microserv
 
 ## Environment
 
-- **Conda env**: `tcc` (Python 3.10, PyTorch 2.5.1, Gymnasium 1.0.0)
+- **Conda envs**: `tcc` (Python 3.10, PyTorch 2.5.1, Gymnasium 1.0.0) is the canonical env on the other machine; on **this** machine the working env is `as` (Python 3.10, PyTorch 2.11.0+cu130, Gymnasium 1.0.0, gymnasium patch verified). Commands below use `tcc` — substitute `as` locally.
 - **Hardware**: 2× RTX 4080 16GB
 - **No build system** — no `pyproject.toml`, `setup.py`, `pytest`, or lint config.
 

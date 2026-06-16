@@ -1,11 +1,25 @@
 import numpy as np
 
 class EnvConfig:
-    """ 数据中心场景参数设置 """
+    """ 数据中心场景参数设置 —— twitter_xlargescale (30 节点 × 15 微服务)
+
+    由 config_twitter_largescale (10n×10ms) 等比放大得到，用于回应二次意见 ① / R1-1
+    （扁平动作空间 (server, microservice, change_amount) 的大规模可扩展性）。
+
+    缩放依据（参照仓库内 small→middle→large 的既定规律，见 config_twitter_*scale.py）：
+      - node_nums   : 10 → 30  (3×)
+      - ms_nums     : 10 → 15  (按 TODO.md:428 计划，动作空间 700→3150；未沿用 ms=node 的不变量，
+                                故 per-MS 负载约为 large 的 2×)
+      - request_flow_nums : 10 → 30  (= node_nums，沿用既定规律：flow 随节点等比增长，保持每节点负载可比)
+      - C           : 35 → 105 (≈ 3.5 × node_nums，与 small/middle/large 同规律)
+      - estimated_max_lamda : 50 → 100  (per-MS 负载翻倍，归一化上限同步翻倍，避免观测饱和)
+      - 其余字段（trace、init_lamda、奖励权重、训练超参）与 largescale 保持一致。
+    动作空间规模：30 × 15 × (2×3+1) = 3150  (vs largescale 700)。
+    """
 
     def __init__(self):
         # id
-        self.config_name = "twitter_largescale"
+        self.config_name = "twitter_xlargescale"
         # 随机数种子
         self.seed = 1037
 
@@ -14,7 +28,7 @@ class EnvConfig:
         self.time_slot_end: int = int(24*60/5) # 5min as a slot
 
         # 服务器节点配置
-        self.node_nums = 10
+        self.node_nums = 30
         self.node_min_cpu_resource = 15   # CPU核数
         self.node_max_cpu_resource = 30
         self.node_min_memory_resource = 200  # 内存 GB
@@ -23,7 +37,7 @@ class EnvConfig:
         self.node2node_max_bandwidth = 3
 
         # 微服务配置
-        self.ms_nums = 10
+        self.ms_nums = 15
         self.init_ms_image_list = [3 for _ in range(self.ms_nums)]    # 初始的各个微服务实例数量
         self.max_instance_update_num = 3
         self.ms_min_cpu_resource = 1
@@ -38,10 +52,10 @@ class EnvConfig:
         self.ms2ms_max_data = 10
 
         # 用户、请求链配置
-        self.request_flow_nums = 10
+        self.request_flow_nums = 30
         self.min_request_chain_length = 3
         self.max_request_chain_length = 5
-        self.estimated_max_lamda = 50
+        self.estimated_max_lamda = 100
         self.init_lamda = 15
         self.min_request_T = 10     # 最大请求时延约束
         self.max_request_T = 20     # 最大请求时延约束
@@ -49,7 +63,7 @@ class EnvConfig:
 
         # 开销
         self.cost_w_list = (0.25, 0.1, 1)
-        self.C = 35     # 服务提供商给出的时间平均长期开销预算
+        self.C = 105     # 服务提供商给出的时间平均长期开销预算 (≈ 3.5 × node_nums)
         self.Q_max = 5
         self.Q_min = 0
 

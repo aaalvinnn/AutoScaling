@@ -49,7 +49,7 @@ class EnvConfig:
 
         # 开销 (C ~ 2.3 * mean_lambda, 与 twitter/sin 同比例)
         self.cost_w_list = (0.25, 0.1, 1)
-        self.C = 50
+        self.C = 35
         self.Q_max = 5
         self.Q_min = 0
 

@@ -78,30 +78,33 @@ class ActorCritic(nn.Module):
     def _standardize_state(self, ob) -> torch.Tensor:
         """ 标准化状态，支持批次形状，同时展平给DNN输入 """
         batch_size = ob.shape[0]
-        total_features = np.sum(self.feature_length_list)
         fl = self.feature_length_list
+        total_features = fl[0] + fl[1] + fl[2] + fl[3] + fl[4]
         res = torch.zeros((batch_size, total_features), dtype=torch.float32, device=CONFIG.device)
 
-        res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / min(
+        deploy_norm = min(
             CONFIG.node_max_cpu_resource / CONFIG.ms_max_cpu_resource,
             CONFIG.node_min_memory_resource / CONFIG.ms_min_memory_resource
         )
+        res[:, :fl[0]] = ob[:, 0].view(batch_size, -1) / deploy_norm
         res[:, fl[0]:fl[0]+fl[1]] = ob[:, 1, 0] / CONFIG.node_max_cpu_resource
         res[:, fl[0]+fl[1]:fl[0]+fl[1]+fl[2]] = ob[:, 2, 0] / CONFIG.node_max_memory_resource
         # res[:, fl[0]+fl[1]+fl[2]:fl[0]+fl[1]+fl[2]+fl[3]] = (ob[:, 3, :, 0] / CONFIG.estimated_max_lamda)
-        for i in range(CONFIG.history_lamda_length):
-            l = fl[0]+fl[1]+fl[2] + self.ms_nums*i
-            r = fl[0]+fl[1]+fl[2] + self.ms_nums*(i+1)
-            if i < self.node_nums:
-                res[:, l:r] = ob[:, 4, :, i] / CONFIG.estimated_max_lamda
-            else:
-                res[:, l:r] = ob[:, 5, :, i-self.node_nums] / CONFIG.estimated_max_lamda
-        
-        for i in range(CONFIG.history_step_length):
-                res[:, fl[0]+fl[1]+fl[2]+fl[3]+i] = ob[:, 6, i//self.node_nums, i%self.ms_nums]
-        
-        # _ = ob.cpu().numpy()
-        # data = res.cpu().numpy()    #debug
+
+        # history lamda: 原 for i in range(H) 逐块赋值; 等价于把 ob[:,4]/ob[:,5] 按 node 轴拼起来取前 H 列,
+        # 再转置展平 (block i == ob[:,4/5][:,:,i])。逐位相同, 但只需 1~2 次 GPU op。
+        H = CONFIG.history_lamda_length
+        lamda_src = torch.cat([ob[:, 4], ob[:, 5]], dim=2)[:, :, :H]   # (batch, ms_nums, H)
+        res[:, fl[0]+fl[1]+fl[2]:fl[0]+fl[1]+fl[2]+fl[3]] = \
+            lamda_src.permute(0, 2, 1).reshape(batch_size, -1) / CONFIG.estimated_max_lamda
+
+        # history step one-hot: 原 for i in range(Hs) 逐标量赋值; 等价于一次性 advanced indexing。
+        Hs = CONFIG.history_step_length
+        idx = torch.arange(Hs, device=ob.device)
+        rows = idx // self.node_nums
+        cols = idx % self.ms_nums
+        res[:, fl[0]+fl[1]+fl[2]+fl[3]:fl[0]+fl[1]+fl[2]+fl[3]+fl[4]] = ob[:, 6, rows, cols]
+
         return res
 
     def get_value(self, ob):
@@ -449,7 +452,7 @@ def train(agent: PPOAgent):
 
     envs.close()
     writer.close()
-    print(f"success: env={CONFIG.config_name} V={CONFIG.V}")
+    print(f"success: env={CONFIG.config_name} V={getattr(CONFIG, 'V', 'N/A')}")
 
 if __name__ == "__main__":
     seed_all(CONFIG.seed)

@@ -324,26 +324,20 @@ class DataCenterEnvironment(gym.Env):
         """
         ms1_nodes = np.where(deploy_info[ms1_id] > 0)[0]
         ms2_nodes = np.where(deploy_info[ms2_id] > 0)[0]
-        res = np.zeros((len(ms1_nodes), len(ms2_nodes)))
-        for i, node1_id in enumerate(ms1_nodes):
-            for j, node2_id in enumerate(ms2_nodes):
-                image_nums = deploy_info[ms2_id][node2_id]
-                sum_image_nums = np.sum(deploy_info[ms2_id][ms2_nodes])
-                res[i][j] = image_nums / sum_image_nums
-
+        # 性能: 原 sum_image_nums 在双层 for 里被反复 np.sum; 这里算一次并整体广播。
+        # 数值与原来逐元素相同 (res[i][j] = deploy_info[ms2_id][ms2_nodes][j] / sum)。
+        ms2_row = deploy_info[ms2_id][ms2_nodes]
+        probs = ms2_row / np.sum(ms2_row)
+        res = np.broadcast_to(probs, (len(ms1_nodes), len(ms2_nodes))).copy()
         return res
-    
+
     def _get_first_route_prob(self, ms1_id, deploy_info):
         """ 计算由中央虚拟总节点路由到部署了ms1_id节点的概率 """
         ms1_nodes = np.where(deploy_info[ms1_id] > 0)[0]
-        res = np.zeros(len(ms1_nodes))
-        for i, node1_id in enumerate(ms1_nodes):
-            image_nums = deploy_info[ms1_id][node1_id]
-            sum_image_nums = np.sum(deploy_info[ms1_id][ms1_nodes])
-            res[i] = image_nums / sum_image_nums
+        # 性能: 向量化, 与原循环逐位等价。
+        ms1_row = deploy_info[ms1_id][ms1_nodes]
+        return ms1_row / np.sum(ms1_row)
 
-        return res
-    
     def _get_node2node_bw_matrix(self, ms1_id, ms2_id, deploy_info):
         """
         计算两个微服务在当前状态下的节点间传输带宽矩阵
@@ -352,13 +346,8 @@ class DataCenterEnvironment(gym.Env):
         """
         ms1_nodes = np.where(deploy_info[ms1_id] > 0)[0]
         ms2_nodes = np.where(deploy_info[ms2_id] > 0)[0]
-        res = np.zeros((len(ms1_nodes), len(ms2_nodes)))
-        for i, node1_id in enumerate(ms1_nodes):
-            for j, node2_id in enumerate(ms2_nodes):
-                bw = self.Node2Node_bandwidth_graph[node1_id, node2_id]
-                res[i][j] = bw
-
-        return res
+        # 性能: 用花式索引代替双层 for, 与原 res[i][j]=bw 逐位等价。
+        return self.Node2Node_bandwidth_graph[np.ix_(ms1_nodes, ms2_nodes)]
         
     # 时延计算
     def _cal_execution_delay(self, request: Request, deploy_info):
@@ -368,19 +357,22 @@ class DataCenterEnvironment(gym.Env):
         for ms_id in request.ms_list:
             ms = self.MS_list[ms_id]
             image_num_list = deploy_info[ms_id]
+            # 性能: 原 np.sum(image_num_list) 在内层 node 循环里被反复调用(小数组上的 numpy 调度开销
+            # 占据了 env.step 的大头, 见 cProfile)。这里提前算一次复用, 数值与原来逐位相同。
+            sum_img = np.sum(image_num_list)
 
             # 请求失败:
             # 该微服务请求到达率大于1（可以证明，因为是线性分流，只要总的服务强度大于等于1，则任意的节点的该微服务服务强度也大于等于1）
-            if ms.lamda / (np.sum(image_num_list)*ms.mu + 1e-6) >= 1:
+            if ms.lamda / (sum_img*ms.mu + 1e-6) >= 1:
                 return request.T_max    # 直接返回用户时延约束阈值
 
             t_exe = 0
             for node in self.Node_list:
                 image_num = int(image_num_list[node.id])
-                lamda = ms.lamda * image_num / np.sum(image_num_list)   # 根据概率路由进行分流
-                if np.sum(image_num_list) == 0:
+                lamda = ms.lamda * image_num / sum_img   # 根据概率路由进行分流
+                if sum_img == 0:
                     raise ValueError(f"Image num list {image_num_list} is not valid!")
-                
+
                 if lamda == 0:
                     continue
 
@@ -391,7 +383,7 @@ class DataCenterEnvironment(gym.Env):
                 p0 = 1 /(p0 + ((1 / (math.factorial(image_num)*(1-ro))) * (lamda/ms.mu)**image_num))
                 lq = ((image_num*ro)**image_num / (math.factorial(image_num)*(1 - ro)**2)) * ro * p0
                 wq = lq / lamda
-                t_exe += wq + 1/ms.mu*(image_num/np.sum(image_num_list))    # 1/ms.mu 是平均处理时间
+                t_exe += wq + 1/ms.mu*(image_num/sum_img)    # 1/ms.mu 是平均处理时间
 
             # 如果计算出的时延大于该请求的最大时延约束
             if t_exe > request.T_max:
@@ -608,8 +600,6 @@ class DataCenterEnvironment(gym.Env):
         Qt = self._update_Qt(cost)
         request_success_rate = self._cal_request_success_rate(t_total_list)
         vload = self._cal_load_variance(0.5)
-        ave_ro = self._cal_average_service_intensity()
-        
 
         # 状态转移
         self.timeslot.add_time()
@@ -659,6 +649,10 @@ class DataCenterEnvironment(gym.Env):
         observation = self.get_observation()
 
         # extra info
+        # NOTE: 只保留训练 logging / 评估画图实际读取的指标。
+        # 已删除(无人消费, 且减少 AsyncVectorEnv 每 step 的 IPC 体积):
+        #   predict_lamda(还会重复调用 predicter.predict)、lamda、lamda_list(唯一数组字段)、
+        #   ave_ro(原 _cal_average_service_intensity 嵌套循环)、r(reward 已单独返回)
         info = {
             "y": y,
             "t_all": np.mean(t_total_list),
@@ -672,13 +666,8 @@ class DataCenterEnvironment(gym.Env):
             "Qt": Qt,
             "penalty": penalty/(self.config.penalty+1e-6),
             "node_using_num": node_using_num,
-            "image_nums": np.sum(self.ms_image_list),
-            "predict_lamda": np.mean(self.predicter.predict()),
-            "lamda": np.mean(lamda_list),
-            "lamda_list": lamda_list,
-            "ave_ro": ave_ro,
+            "image_nums": sum(self.ms_image_list),
             "request_success_rate": request_success_rate,
-            "r": reward
         }
         
         return observation, reward, done, False, info

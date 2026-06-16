@@ -1,30 +1,32 @@
 import sys
 import os
+import importlib
 
 ablation_type = sys.argv[1]
+# 第二个可选参数：数据集/场景名（默认 alibaba_largescale，保持向后兼容）
+config_name_arg = sys.argv[2] if len(sys.argv) > 2 else "alibaba_largescale"
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'env'))
 
 from env import environment
-from env.configs import config_alibaba_largescale
 
-config = config_alibaba_largescale.EnvConfig()
+config_module = importlib.import_module(f"env.configs.config_{config_name_arg}")
+config = config_module.EnvConfig()
 
-if ablation_type == "no_lyapunov":
-    config.ablation_no_lyapunov = True
-    config.config_name = "alibaba_largescale_no_lyapunov"
-elif ablation_type == "no_lyapunov_strict":
-    config.ablation_no_lyapunov_strict = True
-    config.config_name = "alibaba_largescale_no_lyapunov_strict"
-elif ablation_type == "no_history":
-    config.ablation_no_history = True
-    config.config_name = "alibaba_largescale_no_history"
-elif ablation_type == "no_ffd":
-    config.ablation_no_ffd = True
-    config.config_name = "alibaba_largescale_no_ffd"
-else:
+# (config 上要置位的属性名, config_name 的后缀)
+ABLATIONS = {
+    "no_lyapunov":        ("ablation_no_lyapunov",        "no_lyapunov"),
+    "no_lyapunov_strict": ("ablation_no_lyapunov_strict", "no_lyapunov_strict"),
+    "no_history":         ("ablation_no_history",         "no_history"),
+    "no_ffd":             ("ablation_no_ffd",             "no_ffd"),
+}
+if ablation_type not in ABLATIONS:
     print(f"Unknown ablation: {ablation_type}")
     sys.exit(1)
+
+flag_attr, suffix = ABLATIONS[ablation_type]
+setattr(config, flag_attr, True)
+config.config_name = f"{config_name_arg}_{suffix}"
 
 config.total_epoches = 10000
 config.total_timesteps = config.total_epoches * config.num_steps * config.num_envs
