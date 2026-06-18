@@ -225,12 +225,11 @@ def train(agent: PPOAgent):
     writer = SummaryWriter(save_path)
     save_config(save_path)
 
-    envs = gym.vector.AsyncVectorEnv(
+    # SyncVectorEnv: 串行无 fork 子进程，彻底避免 numpy fork 腐蚀崩溃（慢但不崩）
+    # 配合 environment.py _reset_seed 强制 CONFIG.seed，保证并行 env 初始场景一致
+    envs = gym.vector.SyncVectorEnv(
         [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
     )
-    # envs = gym.vector.SyncVectorEnv(
-    #     [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
-    # )
 
     # reward scaling
     reward_scaler = RewardScaler(record_epoch=CONFIG.reward_shaping_record_epoch)

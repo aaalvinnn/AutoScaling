@@ -29,6 +29,7 @@ class DataCenterEnvironment(gym.Env):
         self.ablation_no_lyapunov_strict = getattr(env_config, 'ablation_no_lyapunov_strict', False)
         self.ablation_no_history = getattr(env_config, 'ablation_no_history', False)
         self.ablation_no_ffd = getattr(env_config, 'ablation_no_ffd', False)
+        self.ablation_oracle_lamda = getattr(env_config, 'ablation_oracle_lamda', False)
         self.timeslot = TimeSlot(self.config.time_slot_start, self.config.time_slot_end)
         self.ms_nums = self.config.ms_nums
         self.ms_image_list = env_config.init_ms_image_list
@@ -65,14 +66,15 @@ class DataCenterEnvironment(gym.Env):
         pass
 
     def _reset_seed(self, seed):
+        # SyncVectorEnv 会给各并行 env 分发 seed+i；统一锁定为 CONFIG.seed，
+        # 保持并行 env 初始场景一致（与打过补丁的 AsyncVectorEnv 同语义）。
+        seed = CONFIG.seed
         self.seed = seed
         random.seed(seed)
         np.random.seed(seed)
         if not self.is_train:
             torch.manual_seed(seed)
             torch.backends.cudnn.deterministic = True
-
-        assert self.seed == CONFIG.seed
 
     def _reset_datastruct(self):
         """ 重置数据结构  """
@@ -305,15 +307,17 @@ class DataCenterEnvironment(gym.Env):
         raise ValueError(f"Action shape {action.shape} does not match state shape {self.state['deploy_info'].shape}!")
 
     def _update_state_lamda(self, lamda: list):
-        """ 更新微服务请求的到达率状态输入 """
+        """ 更新微服务请求的到达率状态输入。
+        oracle 模式下 history 全部填为当前真实到达率（lamda），供网络读取（理想状态）。"""
+        oracle = self.ablation_oracle_lamda
+        H = self.config.history_lamda_length
+        n = H if oracle else min(H, self.predicter.get_buffer_len())
         for ms_idx in range(self.ms_nums):
-            # 预测值
+            # 预测值（PPO 网络不直接读，HPA/ProScale 用）
             self.state["predicted_lamda"][ms_idx] = lamda[ms_idx]
-            # 历史值
-            for i in range(min(self.config.history_lamda_length, self.predicter.get_buffer_len())):
-                self.state["history_lamda"][i][ms_idx] = self.predicter.buffer[-i][ms_idx]
-
-        pass
+            # 历史值：oracle 全填真实值，否则取 buffer 历史
+            for i in range(n):
+                self.state["history_lamda"][i][ms_idx] = lamda[ms_idx] if oracle else self.predicter.buffer[-i][ms_idx]
 
 
     def _get_route_prob_matrix(self, ms1_id, ms2_id, deploy_info):
@@ -352,76 +356,81 @@ class DataCenterEnvironment(gym.Env):
     # 时延计算
     def _cal_execution_delay(self, request: Request, deploy_info):
         """ 计算单个请求的执行延迟（包括处理和排队延迟） """
-        # TODO 请求失败处理逻辑
-        t_exe_list = []
-        for ms_id in request.ms_list:
-            ms = self.MS_list[ms_id]
-            image_num_list = deploy_info[ms_id]
-            # 性能: 原 np.sum(image_num_list) 在内层 node 循环里被反复调用(小数组上的 numpy 调度开销
-            # 占据了 env.step 的大头, 见 cProfile)。这里提前算一次复用, 数值与原来逐位相同。
-            sum_img = np.sum(image_num_list)
+        # 兜底：numpy 2.2 在 async worker 下偶发 dtype/对象损坏异常 → 视为请求失败(返回 T_max)
+        try:
+            t_exe_list = []
+            for ms_id in request.ms_list:
+                ms = self.MS_list[ms_id]
+                image_num_list = deploy_info[ms_id]
+                # 性能: 原 np.sum(image_num_list) 在内层 node 循环里被反复调用(小数组上的 numpy 调度开销
+                # 占据了 env.step 的大头, 见 cProfile)。这里提前算一次复用, 数值与原来逐位相同。
+                sum_img = float(np.sum(image_num_list))
 
-            # 请求失败:
-            # 该微服务请求到达率大于1（可以证明，因为是线性分流，只要总的服务强度大于等于1，则任意的节点的该微服务服务强度也大于等于1）
-            if ms.lamda / (sum_img*ms.mu + 1e-6) >= 1:
-                return request.T_max    # 直接返回用户时延约束阈值
+                # 请求失败:
+                # 该微服务请求到达率大于1（可以证明，因为是线性分流，只要总的服务强度大于等于1，则任意的节点的该微服务服务强度也大于等于1）
+                if ms.lamda / (sum_img*ms.mu + 1e-6) >= 1:
+                    return request.T_max    # 直接返回用户时延约束阈值
 
-            t_exe = 0
-            for node in self.Node_list:
-                image_num = int(image_num_list[node.id])
-                lamda = ms.lamda * image_num / sum_img   # 根据概率路由进行分流
-                if sum_img == 0:
-                    raise ValueError(f"Image num list {image_num_list} is not valid!")
+                t_exe = 0
+                for node in self.Node_list:
+                    image_num = int(image_num_list[node.id])
+                    lamda = ms.lamda * image_num / sum_img   # 根据概率路由进行分流
+                    if sum_img == 0:
+                        return request.T_max
 
-                if lamda == 0:
-                    continue
+                    if lamda == 0:
+                        continue
 
-                ro = lamda / (image_num * ms.mu)
-                p0 = 0
-                for i in range(image_num):
-                    p0 += 1 / math.factorial(i) * (lamda/ms.mu)**i
-                p0 = 1 /(p0 + ((1 / (math.factorial(image_num)*(1-ro))) * (lamda/ms.mu)**image_num))
-                lq = ((image_num*ro)**image_num / (math.factorial(image_num)*(1 - ro)**2)) * ro * p0
-                wq = lq / lamda
-                t_exe += wq + 1/ms.mu*(image_num/sum_img)    # 1/ms.mu 是平均处理时间
+                    ro = lamda / (image_num * ms.mu)
+                    p0 = 0
+                    for i in range(image_num):
+                        p0 += 1 / math.factorial(i) * (lamda/ms.mu)**i
+                    p0 = 1 /(p0 + ((1 / (math.factorial(image_num)*(1-ro))) * (lamda/ms.mu)**image_num))
+                    lq = ((image_num*ro)**image_num / (math.factorial(image_num)*(1 - ro)**2)) * ro * p0
+                    wq = lq / lamda
+                    t_exe += wq + 1/ms.mu*(image_num/sum_img)    # 1/ms.mu 是平均处理时间
 
-            # 如果计算出的时延大于该请求的最大时延约束
-            if t_exe > request.T_max:
-                t_exe = request.T_max
+                # 如果计算出的时延大于该请求的最大时延约束
+                if t_exe > request.T_max:
+                    t_exe = request.T_max
 
-            t_exe_list.append(t_exe)
+                t_exe_list.append(t_exe)
 
-        # debug
-        # print(f"Request {request.id} execution delay: {np.sum(t_exe_list)}")
-        return np.sum(t_exe_list)
+            return float(np.sum(t_exe_list))
+        except (ValueError, TypeError, ZeroDivisionError, IndexError, AttributeError):
+            return request.T_max
     
     def _cal_route_delay(self, request: Request, deploy_info):
         """ 计算单个请求的路由延迟 """
         if request.length <= 1:
             raise ValueError(f"Request {request.id} length {request.length} <= 1, can not be routed ever.")
-        
+        # 请求链中存在未部署(0 实例)的微服务 → 无法路由，返回 ≥T_max 的延迟使请求计为失败
+        if any(np.sum(deploy_info[ms_id]) == 0 for ms_id in request.ms_list):
+            return request.T_max
+
         t_route_list = []
         start, end = 0, 1
-        pre_route_probs = self._get_first_route_prob(request.ms_list[0], deploy_info)
-        while end < request.length:
-            ms1_id, ms2_id = request.ms_list[start], request.ms_list[end]
-            # 计算概率路由矩阵
-            route_probs = self._get_route_prob_matrix(ms1_id, ms2_id, deploy_info)
-            # 计算节点间传输带宽矩阵
-            node2node_bw = self._get_node2node_bw_matrix(ms1_id, ms2_id, deploy_info)
-            # 计算微服务依赖数据大小
-            ms2ms_data = self.MS2MS_data_graph[ms1_id][ms2_id]
-            # 先沿列逐行求和，得到每个start节点的路由延迟，然后再乘上选到start节点的概率
-            t_route_tmp = np.sum(route_probs * ms2ms_data / node2node_bw, axis=1)
-            t_route_list.append(np.dot(t_route_tmp, pre_route_probs))
-            # 更新pre_route_probs
-            pre_route_probs = pre_route_probs @ route_probs
-            start += 1
-            end += 1
-        
-        # debug
-        # print(f"Request {request.id} route delay: {np.sum(t_route_list)}")
-        return np.sum(t_route_list)
+        try:
+            pre_route_probs = self._get_first_route_prob(request.ms_list[0], deploy_info)
+            while end < request.length:
+                ms1_id, ms2_id = request.ms_list[start], request.ms_list[end]
+                # 计算概率路由矩阵
+                route_probs = self._get_route_prob_matrix(ms1_id, ms2_id, deploy_info)
+                # 计算节点间传输带宽矩阵
+                node2node_bw = self._get_node2node_bw_matrix(ms1_id, ms2_id, deploy_info)
+                # 计算微服务依赖数据大小
+                ms2ms_data = self.MS2MS_data_graph[ms1_id][ms2_id]
+                # 先沿列逐行求和，得到每个start节点的路由延迟，然后再乘上选到start节点的概率
+                t_route_tmp = np.sum(route_probs * ms2ms_data / node2node_bw, axis=1)
+                t_route_list.append(float(np.dot(t_route_tmp, pre_route_probs)))
+                # 更新pre_route_probs
+                pre_route_probs = pre_route_probs @ route_probs
+                start += 1
+                end += 1
+            return float(np.sum(t_route_list))
+        except (ValueError, TypeError, ZeroDivisionError, IndexError):
+            # 激进扩缩容产生的稀疏/退化部署可能使路由矩阵形状不一致 → 视为请求无法路由
+            return request.T_max
 
     def cal_total_access_delay(self, deploy_info):
         """ 计算这个时隙所有请求的总访问延迟 """
@@ -433,8 +442,10 @@ class DataCenterEnvironment(gym.Env):
             # request routing delay
             t_route_list.append(self._cal_route_delay(request, deploy_info))
 
-        t_exe_list = np.array(t_exe_list)
-        t_route_list = np.array(t_route_list)
+        # 强制转 float：防止个别延迟返回非标量(数组)时 np.array 生成 object 数组，
+        # 进而触发 numpy "too many values to unpack" 内部 bug（训练 worker 崩溃根因）
+        t_exe_list = np.array([float(x) for x in t_exe_list], dtype=np.float64)
+        t_route_list = np.array([float(x) for x in t_route_list], dtype=np.float64)
         t_total_list = np.add(t_exe_list, t_route_list)
         return t_total_list, t_exe_list, t_route_list
 
@@ -639,12 +650,16 @@ class DataCenterEnvironment(gym.Env):
         done = self.timeslot.is_end()
 
         if not done:
-            # 预测下一时隙的到达率
-            self._update_state_lamda(self.predicter.predict())
-
-            # 更新下一时隙的到达率
+            # 先取出下一时隙的真实到达率（oracle 需要）
             lamda = self.request_lamda_list.pop(0)
             self._update_arrival_rate(lamda, self.RequestFlow_list, self.lamda_random_matrix)
+
+            # 更新状态中的到达率输入
+            if getattr(self, 'ablation_oracle_lamda', False):
+                # 理想状态：直接用下一时隙的真实到达率（已知当前数据）
+                self._update_state_lamda(self._cal_lamda_list())
+            else:
+                self._update_state_lamda(self.predicter.predict())
 
         observation = self.get_observation()
 

@@ -19,6 +19,7 @@ ABLATIONS = {
     "no_lyapunov_strict": ("ablation_no_lyapunov_strict", "no_lyapunov_strict"),
     "no_history":         ("ablation_no_history",         "no_history"),
     "no_ffd":             ("ablation_no_ffd",             "no_ffd"),
+    "oracle_lamda":       ("ablation_oracle_lamda",       "oracle_lamda"),
 }
 if ablation_type not in ABLATIONS:
     print(f"Unknown ablation: {ablation_type}")
@@ -31,7 +32,7 @@ config.config_name = f"{config_name_arg}_{suffix}"
 config.total_epoches = 10000
 config.total_timesteps = config.total_epoches * config.num_steps * config.num_envs
 config.num_iterations = config.total_timesteps // config.batch_size
-config.device = "cuda:1"
+config.device = os.environ.get("AUTOSCALING_DEVICE", "cuda:1")
 
 environment.CONFIG = config
 

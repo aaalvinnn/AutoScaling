@@ -73,7 +73,7 @@ class EnvConfig:
         self.model_path = "model"
         self.is_las = False
         self.num_steps = self.time_slot_end - self.time_slot_start
-        self.num_envs = 32
+        self.num_envs = 8
         self.batch_size = int(self.num_envs * self.num_steps)
         self.num_minibatches = 4
         self.minibatch_size = int(self.batch_size // self.num_minibatches)
