@@ -13,3 +13,4 @@ trained_models.tar
 *.npy
 *.tar
 *.log
+/logs

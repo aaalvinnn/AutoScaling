@@ -29,6 +29,13 @@ for _i in range(1, len(sys.argv)):
 
 from env import environment
 from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
+from methods.vector_env_backend import make_vector_env as make_training_vector_env
+from methods.train_checkpoint import (
+    save_train_state, load_train_state,
+    snapshot_rng, restore_rng,
+    reward_scaler_to_dict, load_reward_scaler,
+    find_latest_resume_dir,
+)
 
 
 CONFIG = environment.CONFIG
@@ -220,22 +227,39 @@ def seed_all(seed):
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     
-def train(agent: PPOAgent):
-    save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "PPO_dnn")
-    writer = SummaryWriter(save_path)
-    save_config(save_path)
+def train(agent: PPOAgent, resume_dir=None):
+    # ── 续跑：写进同一目录（TensorBoard 曲线连续），否则用新时间戳目录 ──
+    resume_state = None
+    if resume_dir is not None:
+        ckpt_file = os.path.join(resume_dir, "train_state.pt")
+        if os.path.exists(ckpt_file):
+            print(f"[resume] loading train_state.pt from {resume_dir}")
+            resume_state = load_train_state(ckpt_file, map_location=CONFIG.device)
+            save_path = resume_dir
+        else:
+            print(f"[resume] {ckpt_file} 不存在，回退冷启动")
+            save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "PPO_dnn")
+    else:
+        save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "PPO_dnn")
 
-    # SyncVectorEnv: 串行无 fork 子进程，彻底避免 numpy fork 腐蚀崩溃（慢但不崩）
-    # 配合 environment.py _reset_seed 强制 CONFIG.seed，保证并行 env 初始场景一致
-    envs = gym.vector.SyncVectorEnv(
+    # 已训练完成（iteration 达到 num_iterations）则直接退出，不 spawn env、不空跑
+    if resume_state is not None and int(resume_state.get("iteration", 0)) >= CONFIG.num_iterations:
+        print(f"[done] iteration={int(resume_state['iteration'])} 已达 num_iterations={CONFIG.num_iterations}，训练完成，停止", flush=True)
+        return
+
+    writer = SummaryWriter(save_path)
+    if resume_state is None:
+        save_config(save_path)
+
+    # spawn: async 步进（快），且避开 fork-after-CUDA/numpy 的 worker 腐蚀。
+    # 可用 AUTOSCALING_VECTOR_BACKEND=fork|sync|forkserver 覆盖做对照。
+    envs = make_training_vector_env(
         [make_env(i, CONFIG) for i in range(CONFIG.num_envs)],
+        default_backend="spawn",
     )
 
     # reward scaling
     reward_scaler = RewardScaler(record_epoch=CONFIG.reward_shaping_record_epoch)
-
-    # check whether the seeds are the same
-    # TODO
 
     # Storage setup
     obs = torch.zeros((CONFIG.num_steps, CONFIG.num_envs) + envs.single_observation_space.shape).to(CONFIG.device)
@@ -250,11 +274,25 @@ def train(agent: PPOAgent):
     start_time = time.time()
     # best_reward = 0
     best_y = np.inf
+    start_iteration = 1
+
+    # ── 恢复全状态：权重(已在 agent 上) + 优化器 + reward shaping + 计数器 + RNG ──
+    if resume_state is not None:
+        agent.actorcrtic.load_state_dict(resume_state["model"])
+        agent.optimizer.load_state_dict(resume_state["optimizer"])
+        load_reward_scaler(reward_scaler, resume_state["reward_scaler"])
+        start_iteration = int(resume_state["iteration"]) + 1
+        global_step = int(resume_state.get("global_step", 0))
+        best_y = float(resume_state.get("best_y", np.inf))
+        restore_rng(resume_state.get("rng"))
+        print(f"[resume] 从 iteration={start_iteration} 续跑 | "
+              f"reward_shaping mean={reward_scaler.mean} var={reward_scaler.var} | "
+              f"optimizer state={len(agent.optimizer.state_dict().get('state', {}))} 组")
 
     record_reward = []
     record_y = []
-    with tqdm(total=CONFIG.num_iterations, desc="Training", unit="it") as pbar:
-        for iteration in range(1, CONFIG.num_iterations + 1):
+    with tqdm(total=CONFIG.num_iterations, desc="Training", unit="it", initial=start_iteration - 1) as pbar:
+        for iteration in range(start_iteration, CONFIG.num_iterations + 1):
             total_reward = []
             total_y = []
             total_Qt = []
@@ -348,6 +386,19 @@ def train(agent: PPOAgent):
                 agent.save(save_path, "model_dnn_best.pth")
             if iteration % 5000 == 0:
                 agent.save(save_path, f"model_dnn_{iteration}.pth")
+            # 全状态 checkpoint（原子写）：权重+优化器+reward shaping+计数器+RNG，供崩溃续跑
+            save_train_state(
+                os.path.join(save_path, "train_state.pt"),
+                {
+                    "model": agent.actorcrtic.state_dict(),
+                    "optimizer": agent.optimizer.state_dict(),
+                    "reward_scaler": reward_scaler_to_dict(reward_scaler),
+                    "iteration": iteration,
+                    "global_step": global_step,
+                    "best_y": float(best_y),
+                    "rng": snapshot_rng(),
+                },
+            )
 
             # bootstrap value if not done
             with torch.no_grad():
@@ -451,10 +502,12 @@ def train(agent: PPOAgent):
 
     envs.close()
     writer.close()
-    print(f"success: env={CONFIG.config_name} V={getattr(CONFIG, 'V', 'N/A')}")
+    print(f"success: env={CONFIG.config_name}")
 
 if __name__ == "__main__":
     seed_all(CONFIG.seed)
     agent = PPOAgent(CONFIG)
     # agent.load("model/twitter_largescale/0423/2341_V10/PPO_dnn")
-    train(agent)
+    # --auto-resume: 从最近一次的 train_state.pt 续跑（供外层重启循环调用）
+    resume_dir = find_latest_resume_dir(CONFIG, "PPO_dnn") if "--auto-resume" in sys.argv else None
+    train(agent, resume_dir=resume_dir)

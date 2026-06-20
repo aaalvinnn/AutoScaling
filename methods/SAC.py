@@ -30,6 +30,13 @@ for _i in range(1, len(sys.argv)):
 
 from env import environment
 from env.configs import config_sin_smallscale, config_sin_middlescale, config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
+from methods.vector_env_backend import make_vector_env as make_training_vector_env
+from methods.train_checkpoint import (
+    save_train_state, load_train_state,
+    snapshot_rng, restore_rng,
+    reward_scaler_to_dict, load_reward_scaler,
+    find_latest_resume_dir,
+)
 
 
 CONFIG = environment.CONFIG
@@ -369,17 +376,36 @@ def seed_all(seed):
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
 
-def train():
+def train(resume_dir=None):
     args = tyro.cli(Args)
 
-    save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "SAC")
+    # ── 续跑：写进同一目录（TensorBoard 曲线连续），否则用新时间戳目录 ──
+    resume_state = None
+    if resume_dir is not None:
+        ckpt_file = os.path.join(resume_dir, "train_state.pt")
+        if os.path.exists(ckpt_file):
+            print(f"[resume] loading train_state.pt from {resume_dir}")
+            resume_state = load_train_state(ckpt_file, map_location=device)
+            save_path = resume_dir
+        else:
+            print(f"[resume] {ckpt_file} 不存在，回退冷启动")
+            save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "SAC")
+    else:
+        save_path = os.path.join(CONFIG.model_path, CONFIG.config_name, datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "SAC")
+
+    # 已训练完成（global_step 达到 total_timesteps）则直接退出，不 spawn env、不空跑
+    if resume_state is not None and int(resume_state.get("global_step", 0)) >= args.total_timesteps:
+        print(f"[done] global_step={int(resume_state['global_step'])} 已达 total_timesteps={args.total_timesteps}，训练完成，停止", flush=True)
+        return
+
     writer = SummaryWriter(save_path)
-    save_config(save_path)
+    if resume_state is None:
+        save_config(save_path)
 
     # env setup
-    envs = gym.vector.AsyncVectorEnv(
-        [make_env(i, CONFIG) for i in range(args.num_envs)],
-    )
+    # spawn: async 步进（快），且避开 fork-after-CUDA/numpy 的 worker 腐蚀。
+    # 可用 AUTOSCALING_VECTOR_BACKEND=sync|fork|forkserver 覆盖做对照。
+    envs = make_training_vector_env([make_env(i, CONFIG) for i in range(args.num_envs)], default_backend="spawn")
     # envs = make_env(0, CONFIG)()
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -409,6 +435,28 @@ def train():
     else:
         alpha = args.alpha
 
+    # ── 恢复全状态：actor/critic/target/优化器/log_alpha/reward shaping/global_step/RNG ──
+    # replay buffer 不恢复（决策：续跑后重新采集）；env 不恢复内部时间线（worker 全新，reset 重取 obs）
+    start_step = 0
+    if resume_state is not None:
+        actor.load_state_dict(resume_state["actor"])
+        qf1.load_state_dict(resume_state["qf1"])
+        qf2.load_state_dict(resume_state["qf2"])
+        qf1_target.load_state_dict(resume_state["qf1_target"])
+        qf2_target.load_state_dict(resume_state["qf2_target"])
+        q_optimizer.load_state_dict(resume_state["q_optimizer"])
+        actor_optimizer.load_state_dict(resume_state["actor_optimizer"])
+        if args.autotune:
+            log_alpha.data = resume_state["log_alpha"].to(device)
+            a_optimizer.load_state_dict(resume_state["a_optimizer"])
+            alpha = log_alpha.exp().item()
+        load_reward_scaler(reward_scaler, resume_state["reward_scaler"])
+        start_step = int(resume_state.get("global_step", 0))
+        restore_rng(resume_state.get("rng"))
+        print(f"[resume] 从 global_step={start_step} 续跑 | "
+              f"reward_shaping mean={reward_scaler.mean} var={reward_scaler.var} count={reward_scaler.count} | "
+              f"alpha={alpha}")
+
     envs.single_observation_space.dtype = np.float32
     rb = ReplayBuffer(int(args.buffer_size))
     start_time = time.time()
@@ -429,8 +477,8 @@ def train():
     total_image_nums = []
     total_rsr = []  # 请求成功率
     total_penalty = []
-    with tqdm(total=args.total_timesteps / args.epoch_steps, desc="Training", unit="it") as pbar:
-        for global_step in range(args.total_timesteps):
+    with tqdm(total=args.total_timesteps / args.epoch_steps, desc="Training", unit="it", initial=start_step // args.epoch_steps) as pbar:
+        for global_step in range(start_step, args.total_timesteps):
             # ALGO LOGIC: put action logic here
             if global_step < args.learning_starts:
                 actions = np.array([[random.uniform(0, CONFIG.node_nums), random.uniform(0, CONFIG.ms_nums), random.uniform(0, CONFIG.max_instance_update_num)] for _ in range(envs.num_envs)])
@@ -459,7 +507,10 @@ def train():
             obs = next_obs
 
             # ALGO LOGIC: training.
-            if global_step > args.learning_starts + args.reward_shaping_record_steps:
+            # 注意 buffer-size 守卫：续跑时 replay buffer 丢弃后从空开始（见 train_checkpoint 决策），
+            # 但 global_step 已越过 learning_starts；此时必须等重新采集到 ≥ batch_size 条才能采样，
+            # 否则 rb.sample 会抛 "Sample larger than population"。冷启动时该守卫恒满足（无副作用）。
+            if global_step > args.learning_starts + args.reward_shaping_record_steps and rb.size() >= args.batch_size:
                 data = {"observations": None, "actions": None, "rewards": None, "next_observations": None, "dones": None}
                 data["observations"], data["actions"], data["rewards"], data["next_observations"], data["dones"] = rb.sample(args.batch_size)
 
@@ -564,6 +615,24 @@ def train():
                     actor.save(save_path, f"model_{iteration}.pth")
                     qf1.save(save_path, f"qf1_{iteration}.pth")
                     qf2.save(save_path, f"qf2_{iteration}.pth")
+                # 全状态 checkpoint（原子写）：网络/目标网/优化器/log_alpha/reward shaping/global_step/RNG
+                # replay buffer 不存（决策：续跑后重新采集）
+                train_state_payload = {
+                    "actor": actor.state_dict(),
+                    "qf1": qf1.state_dict(),
+                    "qf2": qf2.state_dict(),
+                    "qf1_target": qf1_target.state_dict(),
+                    "qf2_target": qf2_target.state_dict(),
+                    "q_optimizer": q_optimizer.state_dict(),
+                    "actor_optimizer": actor_optimizer.state_dict(),
+                    "reward_scaler": reward_scaler_to_dict(reward_scaler),
+                    "global_step": global_step,
+                    "rng": snapshot_rng(),
+                }
+                if args.autotune:
+                    train_state_payload["log_alpha"] = log_alpha.detach().cpu()
+                    train_state_payload["a_optimizer"] = a_optimizer.state_dict()
+                save_train_state(os.path.join(save_path, "train_state.pt"), train_state_payload)
 
                 # result data
                 # print(f"Iteration: {iteration}, Total Reward: {np.sum(total_reward)}")
@@ -608,4 +677,9 @@ def train():
 
 if __name__ == "__main__":
     seed_all(CONFIG.seed)
-    train()
+    # --auto-resume 不在 Args 里，tyro 不识别；先从 argv 剥离，再交给 train()
+    auto_resume = "--auto-resume" in sys.argv
+    if auto_resume:
+        sys.argv = [a for a in sys.argv if a != "--auto-resume"]
+    resume_dir = find_latest_resume_dir(CONFIG, "SAC") if auto_resume else None
+    train(resume_dir=resume_dir)

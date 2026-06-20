@@ -629,7 +629,10 @@ class DataCenterEnvironment(gym.Env):
                 y = self.config.y_weight_train*cost + np.mean(t_total_list)
                 reward = -y
             else:
-                reward = -y
+                # 主 LGDRL：默认 reward=-y；若 config 设了 rsr_reward_coef，则加 RSR 项
+                # reward = -y + rsr_reward_coef * RSR，强激励去饱和部署以提升成功率/降延迟
+                rsr_coef = getattr(self.config, 'rsr_reward_coef', 0)
+                reward = -y + rsr_coef * request_success_rate
         elif self.agent_type == "SAC":
             reward = -self.config.y_weight_train*cost + request_success_rate*20
         elif self.agent_type == "DeepScaler":

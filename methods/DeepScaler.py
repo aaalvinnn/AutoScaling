@@ -42,6 +42,13 @@ for _i in range(1, len(sys.argv)):
         break
 
 from env import environment
+from methods.vector_env_backend import make_vector_env as make_training_vector_env
+from methods.train_checkpoint import (
+    save_train_state, load_train_state,
+    snapshot_rng, restore_rng,
+    reward_scaler_to_dict, load_reward_scaler,
+    find_latest_resume_dir,
+)
 
 CONFIG = environment.CONFIG
 
@@ -534,16 +541,41 @@ def save_config(save_path, config):
     shutil.copy(config_path, config_dir)
 
 
-def train(config, agent: DeepScalerAgent, agent_type: str = "DeepScaler", save_every: int = 250):
-    save_path = os.path.join(
-        config.model_path, config.config_name,
-        datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "DeepScaler"
-    )
-    writer = SummaryWriter(save_path)
-    save_config(save_path, config)
+def train(config, agent: DeepScalerAgent, agent_type: str = "DeepScaler", save_every: int = 250, resume_dir=None):
+    # ── 续跑：写进同一目录（TensorBoard 曲线连续），否则用新时间戳目录 ──
+    resume_state = None
+    if resume_dir is not None:
+        ckpt_file = os.path.join(resume_dir, "train_state.pt")
+        if os.path.exists(ckpt_file):
+            print(f"[resume] loading train_state.pt from {resume_dir}")
+            resume_state = load_train_state(ckpt_file, map_location=config.device)
+            save_path = resume_dir
+        else:
+            print(f"[resume] {ckpt_file} 不存在，回退冷启动")
+            save_path = os.path.join(
+                config.model_path, config.config_name,
+                datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "DeepScaler"
+            )
+    else:
+        save_path = os.path.join(
+            config.model_path, config.config_name,
+            datetime.now().strftime("%m%d"), datetime.now().strftime("%H%M"), "DeepScaler"
+        )
 
-    envs = gym.vector.AsyncVectorEnv(
-        [make_env(i, config, agent_type=agent_type) for i in range(config.num_envs)]
+    # 已训练完成（iteration 达到 num_iterations）则直接退出，不 spawn env、不空跑
+    if resume_state is not None and int(resume_state.get("iteration", 0)) >= config.num_iterations:
+        print(f"[done] iteration={int(resume_state['iteration'])} 已达 num_iterations={config.num_iterations}，训练完成，停止", flush=True)
+        return
+
+    writer = SummaryWriter(save_path)
+    if resume_state is None:
+        save_config(save_path, config)
+
+    # spawn: async 步进（快），且避开 fork-after-CUDA/numpy 的 worker 腐蚀。
+    # 可用 AUTOSCALING_VECTOR_BACKEND=fork|sync|forkserver 覆盖做对照。
+    envs = make_training_vector_env(
+        [make_env(i, config, agent_type=agent_type) for i in range(config.num_envs)],
+        default_backend="spawn",
     )
 
     # reward scaling
@@ -560,10 +592,24 @@ def train(config, agent: DeepScalerAgent, agent_type: str = "DeepScaler", save_e
     global_step = 0
     start_time = time.time()
     best_y = np.inf
+    start_iteration = 1
     record_reward = []
 
-    with tqdm(total=config.num_iterations, desc="Training DeepScaler", unit="it") as pbar:
-        for iteration in range(1, config.num_iterations + 1):
+    # ── 恢复全状态：权重 + 优化器 + reward shaping + 计数器 + RNG ──
+    if resume_state is not None:
+        agent.actorcrtic.load_state_dict(resume_state["model"])
+        agent.optimizer.load_state_dict(resume_state["optimizer"])
+        load_reward_scaler(reward_scaler, resume_state["reward_scaler"])
+        start_iteration = int(resume_state["iteration"]) + 1
+        global_step = int(resume_state.get("global_step", 0))
+        best_y = float(resume_state.get("best_y", np.inf))
+        restore_rng(resume_state.get("rng"))
+        print(f"[resume] 从 iteration={start_iteration} 续跑 | "
+              f"reward_shaping mean={reward_scaler.mean} var={reward_scaler.var} | "
+              f"optimizer state={len(agent.optimizer.state_dict().get('state', {}))} 组")
+
+    with tqdm(total=config.num_iterations, desc="Training DeepScaler", unit="it", initial=start_iteration - 1) as pbar:
+        for iteration in range(start_iteration, config.num_iterations + 1):
             total_reward = []
             total_y = []
             total_cost = []
@@ -625,6 +671,19 @@ def train(config, agent: DeepScalerAgent, agent_type: str = "DeepScaler", save_e
                 agent.save(save_path, "model.pth")
             if iteration % save_every == 0:
                 agent.save(save_path, f"model_{iteration}.pth")
+            # 全状态 checkpoint（原子写）：权重+优化器+reward shaping+计数器+RNG，供崩溃续跑
+            save_train_state(
+                os.path.join(save_path, "train_state.pt"),
+                {
+                    "model": agent.actorcrtic.state_dict(),
+                    "optimizer": agent.optimizer.state_dict(),
+                    "reward_scaler": reward_scaler_to_dict(reward_scaler),
+                    "iteration": iteration,
+                    "global_step": global_step,
+                    "best_y": float(best_y),
+                    "rng": snapshot_rng(),
+                },
+            )
 
             with torch.no_grad():
                 next_value = agent.actorcrtic.get_value(next_obs).reshape(1, -1)
@@ -727,7 +786,6 @@ def train(config, agent: DeepScalerAgent, agent_type: str = "DeepScaler", save_e
 
 def parse_args():
     parser = argparse.ArgumentParser(description="DeepScaler GNN Training")
-    parser.add_argument("--V", type=int, help="V parameter override")
     parser.add_argument("--q-max", type=int, help="Q_max parameter override")
     parser.add_argument("--hidden-dim", type=int, default=64, help="GNN encoder hidden channels")
     parser.add_argument("--dnn-hidden", type=int, default=512, help="DNN hidden layer width (default 512, matches LGDRL)")
@@ -735,6 +793,7 @@ def parse_args():
     parser.add_argument("--device", help="CUDA device override")
     parser.add_argument("--seed", type=int, help="Random seed override")
     parser.add_argument("--resume", help="Resume from checkpoint")
+    parser.add_argument("--auto-resume", action="store_true", help="自动从最近一次 train_state.pt 续跑（供外层重启循环调用）")
     parser.add_argument("--num-iterations", type=int, help="Override num_iterations")
     parser.add_argument("--lyapunov", action="store_true", help="Use Lyapunov reward (-y) instead of weighted-sum")
     parser.add_argument("--save-every", type=int, default=250, help="Save checkpoint every N iterations (default 250)")
@@ -742,11 +801,9 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    args = parse_args()
+    args = parse_args() 
     config = CONFIG
 
-    if args.V is not None:
-        config.V = args.V
     if args.q_max is not None:
         config.Q_max = args.q_max
     if args.device:
@@ -770,7 +827,10 @@ if __name__ == "__main__":
     if args.resume:
         agent.load(args.resume)
 
+    # --auto-resume: 从最近一次 train_state.pt 续跑（全状态，覆盖上面的 --resume 权重加载）
+    resume_dir = find_latest_resume_dir(config, "DeepScaler") if args.auto_resume else None
+
     # choose agent_type string for reward function
     env_agent_type = "DeepScaler-Lyapunov" if args.lyapunov else "DeepScaler"
 
-    train(config, agent, agent_type=env_agent_type, save_every=args.save_every)
+    train(config, agent, agent_type=env_agent_type, save_every=args.save_every, resume_dir=resume_dir)

@@ -127,6 +127,7 @@ LGDRL_MODEL_PATH = {
     "twitter_smallscale": "trained_models/twitter_smallscale/0205/2232/PPO_dnn/model_dnn_best.pth",
     "twitter_middlescale": "trained_models/twitter_middlescale/0202/1555/PPO_dnn/model_dnn_best.pth",
     "twitter_largescale": "model/twitter_largescale/0530/1829/PPO_dnn/model_dnn_best.pth",
+    "twitter_xlargescale": "model/twitter_xlargescale/0619/2040/PPO_dnn/model_dnn_best.pth",
     "alibaba_largescale": "model/alibaba_largescale/0602/1440/PPO_dnn/model_dnn_best.pth"
 }
 
@@ -137,6 +138,7 @@ RLAGENT_MODEL_PATH = {
     "twitter_smallscale": "trained_models/twitter_smallscale/0312/1308_best/SAC",
     "twitter_middlescale": "trained_models/twitter_middlescale/0315/1644/SAC",
     "twitter_largescale": "model/twitter_largescale/0603/1507/SAC",
+    "twitter_xlargescale": "model/twitter_xlargescale/0619/2040/SAC",
     "alibaba_largescale": "model/alibaba_largescale/0602/1446/SAC"
 }
 
@@ -147,6 +149,7 @@ DEEPSCALER_MODEL_PATH = {
     "twitter_smallscale": "",
     "twitter_middlescale": "",
     "twitter_largescale": "model/twitter_largescale/0609/2049/DeepScaler/model_1000.pth",
+    "twitter_xlargescale": "model/twitter_xlargescale/0619/2040/DeepScaler/model_best.pth",
     "alibaba_largescale": "model/alibaba_largescale/0609/2049/DeepScaler/model_best.pth"
 }
 

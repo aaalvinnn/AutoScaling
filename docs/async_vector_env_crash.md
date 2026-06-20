@@ -4,7 +4,9 @@
 
 ## TL;DR
 
-`as` 环境（numpy 2.2.6 + gymnasium 1.0.0）下，`AsyncVectorEnv` 的 **fork 子进程发生内存腐蚀**，训练在 60~1000 epoch 后随机崩溃。错误信息在正常 Python 语义下不可能出现（`enumerate` 解包失败、整数索引失败、`self` 对象类型错乱），指向 fork 子进程的对象/内存损坏。**当前未根治**，已临时改用 `SyncVectorEnv`（串行，慢但不崩）。
+`as` 环境（numpy 2.2.6 + gymnasium 1.0.0）下，`AsyncVectorEnv` 的 **fork 子进程疑似发生内存/对象状态腐蚀**，训练在 60~1000 epoch 后随机崩溃。错误信息在正常 Python 语义下不应出现（`enumerate` 解包失败、整数索引失败、`self` 对象类型错乱），指向 fork 子进程状态损坏。
+
+**2026-06-18 更新**：已确认 `AsyncVectorEnv(context='spawn')` 可以正常 pickle/start/reset/step；短程压力测试通过。当前三个训练入口已统一改成默认 `spawn` 后端，保留环境变量切换到 `sync/fork/forkserver` 做对照。该方案仍需完整长跑验证，但比 `SyncVectorEnv` 快，且避开 fork-after-CUDA/numpy 的主要风险面。
 
 ---
 
@@ -89,7 +91,7 @@ TypeError: Cannot cast array data from dtype('float64') to dtype('bool') accordi
 | 线程限制 `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1` | ❌ PPO 仍在 epoch 60 崩；且让 PPO/DeepScaler 慢 4-5×（单线程 numpy）。SAC 反而变快 |
 | `SyncVectorEnv` | ✅ 不崩，但 env 步进串行慢 ~8×（PPO ~14s/it，~40h）。需配 `_reset_seed` 修复 |
 | PPO auto-resume 循环（崩了 warm-start 续跑） | 🟡 能积累 best.pth，但单次仍崩，非根治 |
-| `AsyncVectorEnv(context='spawn')` | ❓ **未试**。spawn 创建全新解释器无 fork 腐蚀，保留并行速度；风险：env 需可 pickle，worker 启动慢 |
+| `AsyncVectorEnv(context='spawn')` | ✅ **短测通过**。可 pickle/start/reset/step；20 轮 xlarge 随机动作 + CUDA 预初始化压力测试通过。仍需完整训练长跑验证 |
 
 ## 当前代码状态
 
@@ -99,9 +101,36 @@ TypeError: Cannot cast array data from dtype('float64') to dtype('bool') accordi
 3. `_cal_execution_delay`：整体 try/except，异常返回 `request.T_max`；`np.sum(image_num_list)` 包了 `float()`。
 4. `_cal_route_delay`：整体 try/except，异常返回 `request.T_max`；每跳延迟 `float(np.dot(...))`。
 
-**三个训练脚本（`PPO_dnn.py` / `DeepScaler.py` / `SAC.py`）**：当前**已改为 `SyncVectorEnv`**（串行，不崩但慢）。改回 Async 只需把 `SyncVectorEnv` 换回 `AsyncVectorEnv`。
+**三个训练脚本（`PPO_dnn.py` / `DeepScaler.py` / `SAC.py`）**：当前通过 `methods/vector_env_backend.py` 创建 vector env，默认：
+
+```bash
+AUTOSCALING_VECTOR_BACKEND=spawn
+AUTOSCALING_VECTOR_SHARED_MEMORY=1
+```
+
+可临时切换：
+
+```bash
+# 最稳但慢：串行
+AUTOSCALING_VECTOR_BACKEND=sync conda run -n as python methods/PPO_dnn.py --config twitter_xlargescale
+
+# 复现旧问题：Linux 默认 fork
+AUTOSCALING_VECTOR_BACKEND=fork conda run -n as python methods/PPO_dnn.py --config twitter_xlargescale
+
+# spawn 但禁用 Gymnasium observation shared memory
+AUTOSCALING_VECTOR_SHARED_MEMORY=0 conda run -n as python methods/PPO_dnn.py --config twitter_xlargescale
+```
 
 **临时脚本**：`auto_resume_ppo_xlarge.py` + `run_ppo_loop.sh`（PPO 自动续跑循环，Sync 方案下不需要）。
+
+**诊断脚本**：`scripts/probe_vector_env_backend.py`
+
+```bash
+conda run -n as python scripts/probe_vector_env_backend.py --config twitter_xlargescale --backend spawn --iterations 20 --num-envs 8 --preinit-cuda
+conda run -n as python scripts/probe_vector_env_backend.py --config twitter_xlargescale --backend fork --iterations 20 --num-envs 8 --preinit-cuda
+```
+
+2026-06-18 结果：`spawn/fork/sync` 两轮 smoke test 均通过；`spawn/fork` 在 CUDA 预初始化后 20 轮随机动作压力测试均通过。因此最小 env 随机步进尚未复现训练崩溃，问题更可能需要“长时间训练 + fork 后 CUDA/numpy/torch 组合状态”触发。
 
 ## 待排查方向（建议优先级）
 
@@ -111,14 +140,16 @@ TypeError: Cannot cast array data from dtype('float64') to dtype('bool') accordi
    conda run -n as_test pip install numpy==1.26.4 gymnasium==1.0.0 torch ...
    # 复跑 PPO 看是否崩
    ```
-2. **`AsyncVectorEnv(context='spawn')`**：改三个脚本的 env 创建处加 `context='spawn'`。先验证 `DataCenterEnvironment` 工厂能否被 spawn pickle（`make_env` 闭包 + CONFIG）。
-3. **最小复现**：写个脚本只建 `AsyncVectorEnv([make_env]*8)` + 随机步进 5000 步，看能否裸复现（排除 RL 策略因素，纯 env+fork）。
+2. **完整验证 `spawn` 训练**：跑 PPO/DeepScaler/SAC 到至少 1000 epoch，确认不再出现 worker 随机异常。
+3. **最小复现继续加压**：`scripts/probe_vector_env_backend.py` 已覆盖纯 env+随机动作；若还要逼近训练，可增加 PPO/DeepScaler 网络推理与 optimizer step。
 4. **gymnasium 补丁交互**：确认 `reset_async` 的 hand-patch 没有引入 worker 状态不一致（补丁只改 seed 广播，应无关，但值得 review）。
 5. **torch CUDA context fork**：训练脚本 import torch 并初始化 CUDA 后才 fork env worker。试试在创建 `AsyncVectorEnv` **之前**不碰 CUDA，或用 `multiprocessing.set_start_method('spawn')` 全局切换。
 
 ## 关键文件
 
 - `env/environment.py` — env 核心（step/延迟计算/seed），所有崩溃都在这
-- `methods/PPO_dnn.py:228` / `methods/DeepScaler.py:545` / `methods/SAC.py:380` — vector env 创建处
+- `methods/vector_env_backend.py` — 训练脚本统一的 vector env 后端选择器
+- `methods/PPO_dnn.py` / `methods/DeepScaler.py` / `methods/SAC.py` — 训练入口，调用统一后端选择器
+- `scripts/probe_vector_env_backend.py` — 后端 smoke/stress 诊断脚本
 - `env/configs/config_twitter_xlargescale.py` — 场景配置（20n×20ms）
 - 日志样例：`logs/xlarge_{ppo,deepscaler,sac}.log`（含完整 worker 栈）

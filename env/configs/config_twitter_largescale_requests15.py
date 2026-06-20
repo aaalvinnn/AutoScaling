@@ -86,4 +86,3 @@ class EnvConfig:
         self.penalty = -1
         self.y_weight = 0.2
         self.y_weight_train = 0.3   # 废弃
-        self.V = 10     # V = [1, 10, 100]
