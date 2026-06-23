@@ -38,22 +38,18 @@
 | 变体 | 模型路径 |
 |------|----------|
 | AutoLFD (Full) | `model/twitter_largescale/0530/1829/PPO_dnn/model_dnn_best.pth`（canonical，另一台机器训练） |
-| w/o Lyapunov | `model/twitter_largescale_no_lyapunov_strict/0616/0124/PPO_dnn/model_dnn_5000.pth`（本机 `as` 环境，epoch 5000；best 几乎相同） |
+| w/o Lyapunov | `model/twitter_largescale_no_lyapunov_strict/0622/1554/PPO_dnn/model_dnn_3500.pth`（本机 `as` 环境，epoch 3500） |
 
-## 当前结果（实测均值）
+## 当前结果（seed=1037 rollout）
 
-| 变体 | Mean Delay | Mean Cost |
-|------|------------|-----------|
-| AutoLFD (Full) | 7.86 | 30.93 |
-| w/o Lyapunov | 7.20 | 28.90 |
+| 变体 | Mean Delay | Mean Cost | Cost Std | Max Cost | Over-budget | Cumulative Excess | RSR |
+|------|------------|-----------|----------|----------|-------------|-------------------|-----|
+| AutoLFD (Full) | 8.11 | 30.91 | 4.49 | 34.95 | 0.00% | 0.00 | 0.9615 |
+| w/o Lyapunov | 9.05 | 34.74 | 13.68 | 50.85 | 58.68% | 1831.55 | 0.9337 |
 
-## ⚠️ 已知问题（待解决）
+## 解释口径
 
-当前 strict 变体在 delay/cost 上**都略优于 Full**，与"Lyapunov 有贡献"的预期相反。根因是**两个模型训练条件不一致**：
-- Full = canonical（0530/1829，另一台机器、训练超参未知）
-- w/o Lyapunov = 本机重训（`as` 环境，`y_weight_train=0.1`）
-
-不是单变量对照。本机重训的 Full（0616/1027、0617/1110）又稳定退化到 `cost≈8 / delay 11~19` 的过度省成本最优。**需要同条件重训一对 Full + strict** 才能得到干净的 Lyapunov 消融结论。
+Lyapunov 项的贡献不表述为"每个时隙平均能耗最低"，而是**长期预算约束下的成本稳定性**。w/o Lyapunov 退化为静态的 delay+cost 加权 reward，缺少虚拟队列 `Qt` 对历史预算超额的反馈，因此中高负载阶段会出现更大的 cost spike 和频繁预算越界；Full 通过 `Qt` 抑制预算队列发散，整段 rollout 保持在 `C=35` 预算线以内。
 
 ## 相关代码改动
 

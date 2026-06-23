@@ -12,10 +12,11 @@ project_root = os.path.dirname(os.path.dirname(current_dir))
 sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'env'))
 
-fontsize = 24
-legend_fontsize = 18
-label_size = 22
-line_width = 1.8
+fig_size = (7, 5)
+fontsize = 15
+legend_fontsize = 15
+label_size = 12
+line_width = 1.5
 grid_zorder = 0
 alpha = 1
 markersize = 2
@@ -73,14 +74,14 @@ for name, d in all_data.items():
         np.save(os.path.join(data_dir, f"{safe}_{metric}.npy"), arr)
 
 def draw_latency():
-    plt.figure(figsize=(14, 5))
+    plt.figure(figsize=fig_size)
     for i, name in enumerate(ORDER):
         arr = all_data[name]["t_all"]
         plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
                  linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
     plt.xticks(fontsize=label_size); plt.yticks(fontsize=label_size)
     plt.ylabel('Delay', fontsize=fontsize); plt.xlabel("Timeslot", fontsize=fontsize)
-    plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper right')
+    plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
     plt.tight_layout(); plt.grid(True, zorder=grid_zorder)
     for fmt in ["pdf", "png"]:
         plt.savefig(os.path.join(current_dir, f"Delay-history-ablation-twitter.{fmt}"),
@@ -89,14 +90,14 @@ def draw_latency():
     print("Saved Delay-history-ablation-twitter.pdf")
 
 def draw_cost():
-    plt.figure(figsize=(14, 5))
+    plt.figure(figsize=fig_size)
     for i, name in enumerate(ORDER):
         arr = all_data[name]["cost"]
         plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
-                 linestyle=linestyles[i], alpha=alpha)
+                 linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
     plt.xticks(fontsize=label_size); plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize); plt.xlabel("Timeslot", fontsize=fontsize)
-    plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
+    plt.legend(frameon=True, fontsize=legend_fontsize, loc='lower right')
     plt.tight_layout(); plt.grid(True, zorder=grid_zorder)
     for fmt in ["pdf", "png"]:
         plt.savefig(os.path.join(current_dir, f"Cost-history-ablation-twitter.{fmt}"),

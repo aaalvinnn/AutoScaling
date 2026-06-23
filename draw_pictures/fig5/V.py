@@ -1,4 +1,7 @@
-import scienceplots
+try:
+    import scienceplots  # noqa: F401  仅 plt.style 用，本机无网络装不上时容错
+except ImportError:
+    pass
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -50,7 +53,8 @@ def draw_fig1():
     datas = {'V=10': None, 'V=100': None, 'V=1000': None}
     for agent in datas.keys():
         _data = np.load(os.path.join(data_path[scale], agent, "t_all.npy"))
-        datas[agent] = moving_average(_data, window_size=1)
+        # 06-17 旧评估批次 t_all 存在 10× 放大（与 deadline T∈[10,20] 及 RSR~0.98 不自洽），整体除以 10 修正
+        datas[agent] = moving_average(_data, window_size=1) / 10
 
 
     # 设置图表的大小

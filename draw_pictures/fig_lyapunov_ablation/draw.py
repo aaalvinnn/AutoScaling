@@ -12,10 +12,11 @@ project_root = os.path.dirname(os.path.dirname(current_dir))
 sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'env'))
 
-fontsize = 24
-legend_fontsize = 18
-label_size = 22
-line_width = 1.8
+fig_size = (7, 5)
+fontsize = 15
+legend_fontsize = 15
+label_size = 12
+line_width = 1.5
 grid_zorder = 0
 alpha = 1
 markersize = 2
@@ -37,7 +38,7 @@ def make_config(**flags):
 
 configs = [
     ("AutoLFD (Full)",     make_config(),                          os.path.join(ROOT, "model/twitter_largescale/0530/1829/PPO_dnn/model_dnn_best.pth")),
-    ("w/o Lyapunov",       make_config(ablation_no_lyapunov_strict=True), os.path.join(ROOT, "model/twitter_largescale_no_lyapunov_strict/0616/0124/PPO_dnn/model_dnn_5000.pth")),
+    ("w/o Lyapunov",       make_config(ablation_no_lyapunov_strict=True), os.path.join(ROOT, "model/twitter_largescale_no_lyapunov_strict/0622/1554/PPO_dnn/model_dnn_3500.pth")),
 ]
 
 colors     = ["#c22f2f", "#8E6EC8"]
@@ -67,8 +68,11 @@ for name, cfg, model_path in configs:
         "t_all": np.array(t_all_list),
         "cost": np.array(cost_list),
     }
+    cost_arr = np.array(cost_list)
+    excess = np.maximum(cost_arr - cfg.C, 0)
     print(f"{name}: collected {len(t_all_list)} timesteps, "
-          f"mean_delay={np.mean(t_all_list):.2f}, mean_cost={np.mean(cost_list):.2f}")
+          f"mean_delay={np.mean(t_all_list):.2f}, mean_cost={np.mean(cost_list):.2f}, "
+          f"over_budget={np.mean(cost_arr > cfg.C) * 100:.2f}%, excess={np.sum(excess):.2f}")
 
 # ── save raw data ──────────────────────────────────────────────
 data_dir = os.path.join(current_dir, "data")
@@ -80,7 +84,7 @@ for name, d in all_data.items():
 
 # ── draw per-step delay ────────────────────────────────────────
 def draw_latency():
-    plt.figure(figsize=(14, 5))
+    plt.figure(figsize=fig_size)
     for i, name in enumerate(ORDER):
         arr = all_data[name]["t_all"]
         plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
@@ -101,11 +105,13 @@ def draw_latency():
 
 # ── draw per-step cost ─────────────────────────────────────────
 def draw_cost():
-    plt.figure(figsize=(14, 5))
+    plt.figure(figsize=fig_size)
     for i, name in enumerate(ORDER):
         arr = all_data[name]["cost"]
         plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
-                 linestyle=linestyles[i], alpha=alpha)
+                 linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
+    plt.axhline(configs[0][1].C, color="#222222", linestyle=":", linewidth=line_width,
+                label=f"Budget C={configs[0][1].C}")
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize)

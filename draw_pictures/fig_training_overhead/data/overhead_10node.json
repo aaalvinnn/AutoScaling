@@ -1,0 +1,267 @@
+{
+  "config": "twitter_largescale",
+  "generated_at": "2026-06-23 16:40:59",
+  "decision_device": "saved_latency_file",
+  "rows": [
+    {
+      "scenario": "twitter_largescale",
+      "method": "AutoLFD (LGDRL)",
+      "training_epochs": 20000,
+      "convergence_epoch": 11064,
+      "convergence_time_h": 9.61958675040139,
+      "total_training_time_h": 17.57628911919064,
+      "sps": 1452.3772674739962,
+      "decision_mean_ms": 1.0267880416689776,
+      "decision_p95_ms": 1.066508649728348,
+      "model_size_mb": 2.5098724365234375,
+      "param_count": 657948,
+      "checkpoint_file_size_mb": 2.514749526977539,
+      "first_logged_epoch": 100,
+      "last_logged_epoch": 20000,
+      "decision_steps": 288,
+      "decision_std_ms": 0.025774399444291548,
+      "decision_median_ms": 1.0217465005553095,
+      "decision_p99_ms": 1.1554283898112772
+    },
+    {
+      "scenario": "twitter_largescale",
+      "method": "SAC",
+      "training_epochs": 4393,
+      "convergence_epoch": 676,
+      "convergence_time_h": 0.4423964242802726,
+      "total_training_time_h": 26.696868905358844,
+      "sps": 27.06142894806222,
+      "decision_mean_ms": 0.559137670172226,
+      "decision_p95_ms": 0.5873195999811287,
+      "model_size_mb": 2.4668426513671875,
+      "param_count": 646668,
+      "checkpoint_file_size_mb": 2.4704761505126953,
+      "first_logged_epoch": 100,
+      "last_logged_epoch": 4393,
+      "decision_steps": 288,
+      "decision_std_ms": 0.027248878135150957,
+      "decision_median_ms": 0.5566294994423515,
+      "decision_p99_ms": 0.7021920998340646
+    },
+    {
+      "scenario": "twitter_largescale",
+      "method": "DeepScaler",
+      "training_epochs": 10000,
+      "convergence_epoch": 4701,
+      "convergence_time_h": 8.844321618676185,
+      "total_training_time_h": 18.97984206199646,
+      "sps": 667.974245025755,
+      "decision_mean_ms": 1.5133300833996246,
+      "decision_p95_ms": 1.561638800376386,
+      "model_size_mb": 3.632160186767578,
+      "param_count": 952149,
+      "checkpoint_file_size_mb": 3.584932327270508,
+      "first_logged_epoch": 100,
+      "last_logged_epoch": 10000,
+      "decision_steps": 288,
+      "decision_std_ms": 0.027273638315190946,
+      "decision_median_ms": 1.510000000052969,
+      "decision_p99_ms": 1.6154131293478713
+    }
+  ],
+  "extra_rows_20node": [
+    {
+      "scenario": "twitter_xlargescale",
+      "method": "AutoLFD (LGDRL)",
+      "training_epochs": 10000,
+      "convergence_epoch": 8239,
+      "convergence_time_h": 17.69005627857314,
+      "total_training_time_h": 19.36512412958675,
+      "sps": 4659.3848096151905,
+      "decision_mean_ms": 1.2272874054259673,
+      "decision_p95_ms": 1.101135229691863,
+      "model_size_mb": 3.36932373046875,
+      "param_count": 883248,
+      "checkpoint_file_size_mb": 3.374638557434082,
+      "first_logged_epoch": 100,
+      "last_logged_epoch": 10000,
+      "decision_steps": 288,
+      "decision_std_ms": 4.22558506944016,
+      "decision_median_ms": 0.9652405278757215,
+      "decision_p99_ms": 1.1827107530552892
+    },
+    {
+      "scenario": "twitter_xlargescale",
+      "method": "SAC",
+      "training_epochs": 7148,
+      "convergence_epoch": 838,
+      "convergence_time_h": 0.6317727363771862,
+      "total_training_time_h": 27.911925796932643,
+      "sps": 402.97402597402595,
+      "decision_mean_ms": 0.9211348923498817,
+      "decision_p95_ms": 0.7802661682944744,
+      "model_size_mb": 3.2871551513671875,
+      "param_count": 861708,
+      "checkpoint_file_size_mb": 3.291224479675293,
+      "first_logged_epoch": 100,
+      "last_logged_epoch": 7148,
+      "decision_steps": 288,
+      "decision_std_ms": 5.882294974102058,
+      "decision_median_ms": 0.5431275349110365,
+      "decision_p99_ms": 0.9245578141417354
+    },
+    {
+      "scenario": "twitter_xlargescale",
+      "method": "DeepScaler",
+      "training_epochs": 10000,
+      "convergence_epoch": 8888,
+      "convergence_time_h": 20.610426994231013,
+      "total_training_time_h": 21.667573210729493,
+      "sps": 6927.237854762146,
+      "decision_mean_ms": 1.7744574223696772,
+      "decision_p95_ms": 1.6986775735858826,
+      "model_size_mb": 4.927211761474609,
+      "param_count": 1291639,
+      "checkpoint_file_size_mb": 4.8804826736450195,
+      "first_logged_epoch": 100,
+      "last_logged_epoch": 10000,
+      "decision_steps": 288,
+      "decision_std_ms": 3.5522344602413423,
+      "decision_median_ms": 1.5452630468644202,
+      "decision_p99_ms": 1.7920627561397846
+    }
+  ],
+  "metadata": {
+    "sources": {
+      "LGDRL": {
+        "tb_dir": "model/twitter_largescale/0530/1829/PPO_dnn",
+        "model_path": "model/twitter_largescale/0530/1829/PPO_dnn/model_dnn_best.pth"
+      },
+      "SAC": {
+        "tb_dir": "/home/zsw/Papers/AutoScaling_0619/AutoScaling/model/twitter_largescale/0531/1355/SAC",
+        "model_path": "/home/zsw/Papers/AutoScaling_0619/AutoScaling/model/twitter_largescale/0531/1355/SAC/model.pth"
+      },
+      "DeepScaler": {
+        "tb_dir": "/home/zsw/Papers/AutoScaling_0619/AutoScaling/model/twitter_largescale/0607/1653/DeepScaler",
+        "model_path": "/home/zsw/Papers/AutoScaling_0619/AutoScaling/model/twitter_largescale/0607/1653/DeepScaler/model_best.pth"
+      }
+    },
+    "convergence_rule": {
+      "LGDRL": {
+        "convergence_epoch": 11064,
+        "convergence_time_h": 9.61958675040139,
+        "total_training_time_h": 17.57628911919064,
+        "target_y": 8.831601830869987,
+        "threshold_y": 10.06257232221223,
+        "first_logged_epoch": 100,
+        "last_logged_epoch": 20000,
+        "num_logged_points": 19901,
+        "smooth_window": 200,
+        "tail_fraction": 0.1,
+        "tolerance_fraction": 0.05
+      },
+      "SAC": {
+        "convergence_epoch": 676,
+        "convergence_time_h": 0.4423964242802726,
+        "total_training_time_h": 26.696868905358844,
+        "target_y": 27.04382300115186,
+        "threshold_y": 27.847156104939483,
+        "first_logged_epoch": 100,
+        "last_logged_epoch": 4393,
+        "num_logged_points": 4294,
+        "smooth_window": 200,
+        "tail_fraction": 0.1,
+        "tolerance_fraction": 0.05
+      },
+      "DeepScaler": {
+        "convergence_epoch": 4701,
+        "convergence_time_h": 8.844321618676185,
+        "total_training_time_h": 18.97984206199646,
+        "target_y": 15.305437225015565,
+        "threshold_y": 15.992324863886857,
+        "first_logged_epoch": 100,
+        "last_logged_epoch": 10000,
+        "num_logged_points": 9901,
+        "smooth_window": 200,
+        "tail_fraction": 0.1,
+        "tolerance_fraction": 0.05
+      }
+    }
+  },
+  "extra_metadata_20node": {
+    "sources": {
+      "LGDRL": {
+        "tb_dir": "model/twitter_xlargescale/0619/2040/PPO_dnn",
+        "model_path": "model/twitter_xlargescale/0619/2040/PPO_dnn/model_dnn_best.pth"
+      },
+      "SAC": {
+        "tb_dir": "model/twitter_xlargescale/0619/2040/SAC",
+        "model_path": "model/twitter_xlargescale/0619/2040/SAC/model.pth"
+      },
+      "DeepScaler": {
+        "tb_dir": "model/twitter_xlargescale/0619/2040/DeepScaler",
+        "model_path": "model/twitter_xlargescale/0619/2040/DeepScaler/model_best.pth"
+      }
+    },
+    "convergence_rule": {
+      "LGDRL": {
+        "convergence_epoch": 8239,
+        "convergence_time_h": 17.69005627857314,
+        "total_training_time_h": 19.36512412958675,
+        "target_y": 19.57145726090363,
+        "threshold_y": 20.262464094513724,
+        "first_logged_epoch": 100,
+        "last_logged_epoch": 10000,
+        "num_logged_points": 9901,
+        "smooth_window": 200,
+        "tail_fraction": 0.1,
+        "tolerance_fraction": 0.05
+      },
+      "SAC": {
+        "convergence_epoch": 838,
+        "convergence_time_h": 0.6317727363771862,
+        "total_training_time_h": 27.911925796932643,
+        "target_y": 26.285372494596114,
+        "threshold_y": 26.99978924889463,
+        "first_logged_epoch": 100,
+        "last_logged_epoch": 7148,
+        "num_logged_points": 7049,
+        "smooth_window": 200,
+        "tail_fraction": 0.1,
+        "tolerance_fraction": 0.05
+      },
+      "DeepScaler": {
+        "convergence_epoch": 8888,
+        "convergence_time_h": 20.610426994231013,
+        "total_training_time_h": 21.667573210729493,
+        "target_y": 24.001216789480416,
+        "threshold_y": 24.472720624383836,
+        "first_logged_epoch": 100,
+        "last_logged_epoch": 10000,
+        "num_logged_points": 9901,
+        "smooth_window": 200,
+        "tail_fraction": 0.1,
+        "tolerance_fraction": 0.05
+      }
+    }
+  },
+  "extra_latency_20node": {
+    "path": "test_output/twitter_xlargescale/latency.npy",
+    "keys": {
+      "AutoLFD (LGDRL)": {
+        "latency_key": "LGDRL",
+        "decision_steps": 288
+      },
+      "SAC": {
+        "latency_key": "RL Agent",
+        "decision_steps": 288
+      },
+      "DeepScaler": {
+        "latency_key": "DeepScaler",
+        "decision_steps": 288
+      }
+    }
+  },
+  "outputs": {
+    "json": "draw_pictures/fig_training_overhead/data/overhead_10node.json",
+    "latency": "draw_pictures/fig_training_overhead/data/decision_latency_10node.npy",
+    "md": "draw_pictures/fig_training_overhead/training_overhead_10node.md",
+    "csv": "draw_pictures/fig_training_overhead/training_overhead_10node.csv",
+    "tex": "draw_pictures/fig_training_overhead/training_overhead_10node.tex"
+  }
+}

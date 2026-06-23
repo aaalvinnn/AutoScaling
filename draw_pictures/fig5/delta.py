@@ -1,4 +1,7 @@
-import scienceplots
+try:
+    import scienceplots  # noqa: F401  仅 plt.style 用，本机无网络装不上时容错
+except ImportError:
+    pass
 import matplotlib.pyplot as plt
 import numpy as np
 import os
