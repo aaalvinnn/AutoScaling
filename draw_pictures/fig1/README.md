@@ -16,11 +16,15 @@
 
 ## 数据来源
 
+`data/` 下三条负载 trace 是项目根 `data/loads-{twitter,sin,alibaba-v2022}.txt`（仓库共享输入）的**本地副本**，`draw.py` 直接读本地 `data/`。
+
 | 数据集 | 文件 | 特征 |
 |--------|------|------|
 | Twitter | `data/loads-twitter.txt` | Twitter 2022-11-01 真实集群 trace，突发流量明显 |
 | Sin | `data/loads-sin.txt` | 正弦波 + 随机扰动，周期性负载 |
 | Alibaba | `data/loads-alibaba-v2022.txt` | Alibaba Cluster Trace v2022，大规模真实负载 |
+
+**复现**：直接 `python draw.py`（读本地 `data/` 副本）；若根 trace 更新，`cp` 覆盖本目录 `data/` 即可。
 
 ### Alibaba 数据集引用
 

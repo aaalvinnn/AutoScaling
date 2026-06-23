@@ -13,13 +13,21 @@
 |------|------|
 | `Latency-twitter-Large Scale-V.pdf` | Twitter 场景不同 V 值下的逐时隙延迟对比 |
 | `Cost-twitter-Large Scale-V.pdf` | Twitter 场景不同 V 值下的逐时隙开销对比 |
+| `Latency-sin-Large Scale-delta.pdf` | Sin 场景不同 δ 值下的逐时隙延迟对比 |
+| `Cost-sin-Large Scale-delta.pdf` | Sin 场景不同 δ 值下的逐时隙开销对比 |
 
 ## 绘图脚本
 
-| 脚本 | 内容 | 场景 |
-|------|------|------|
-| `V.py` | V 参数敏感性（V=10, 100, 1000） | Twitter Large Scale |
-| `delta.py` | δ 参数敏感性（δ=1, 2, 3） | Sin Large Scale |
+| 脚本 | 内容 | 场景 | 读 |
+|------|------|------|----|
+| `V.py` | V 参数敏感性（V=10, 100, 1000） | Twitter Large Scale | 本地 `data/V={10,100,1000}/*.npy` |
+| `delta.py` | δ 参数敏感性（δ=1, 2, 3） | Sin Large Scale | 本地 `data/delta={1,2,3}/*.npy` |
+
+## 数据来源与复现
+
+- `data/V={10,100,1000}/{t_all,cost,request_success_rate}.npy` 与 `data/delta={1,2,3}/*.npy` —— 各参数取值下 LGDRL 模型评估的逐时隙指标，**从 `test_output/twitter_largescale/data/{V=*,delta=*}/` 复制**（供 release 复现）。
+- **原始数据生成**：用不同 `V` / `node2node` δ 设置训练 LGDRL 模型后，跑 `main.py` 评估，逐时隙 npy 落到 `test_output/twitter_largescale/data/{V=*,delta=*}/`。
+- **复现图表**：直接 `python V.py` / `python delta.py`（读本地 `data/` 副本即可出图，无需重训/重评）。
 
 ## V 参数实验设置
 

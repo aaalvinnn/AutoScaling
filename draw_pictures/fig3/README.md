@@ -38,6 +38,13 @@
 - `data/data_convergence_twitter_xlarge{,scale,deep}*.json` — 20 节点收敛曲线逐 epoch 数据（release 复现）
 - `DeepScaler_*.png` — DeepScaler baseline 的收敛曲线调试图（非论文用图）
 
+## 数据来源与复现
+
+- **10 节点 Train.pdf**：Twitter/Sin 读 `data/0603/*.json`；Alibaba 读 `model/alibaba_largescale/0602/1440/PPO_dnn` 的 TensorBoard。
+- **20 节点三方法**（`draw_xlarge_methods.py`）：读 `model/twitter_xlargescale/0619/2040/{PPO_dnn,DeepScaler,SAC}` 的 `charts/y`。
+- **20 节点 LGDRL 4 层长训**（`draw_xlarge_twitter_deep.py`）：读 `model/twitter_xlargescale_deep/0621/1617/PPO_dnn` 的 `charts/y`。
+- **复现**：直接跑对应脚本（纯 Python tfevents 解析，绕开本机 tensorboard C reader 腐蚀），逐 epoch 数据落 `data/data_convergence_*.json`。
+
 ## 相比原稿（Major Revision 前）的变化
 
 - **新增 Alibaba 收敛曲线**：原稿仅有 Sin + Twitter 的训练曲线，修订后新增 Alibaba 场景的收敛展示
