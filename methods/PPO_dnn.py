@@ -384,7 +384,8 @@ def train(agent: PPOAgent, resume_dir=None):
             if best_y > np.mean(total_y):
                 best_y = np.mean(total_y)
                 agent.save(save_path, "model_dnn_best.pth")
-            if iteration % 5000 == 0:
+            checkpoint_interval = getattr(CONFIG, "checkpoint_interval", 5000)
+            if checkpoint_interval and iteration % checkpoint_interval == 0:
                 agent.save(save_path, f"model_dnn_{iteration}.pth")
             # 全状态 checkpoint（原子写）：权重+优化器+reward shaping+计数器+RNG，供崩溃续跑
             save_train_state(
@@ -494,10 +495,12 @@ def train(agent: PPOAgent, resume_dir=None):
             writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
             record_reward.append(np.sum(total_reward))
-            if len(record_reward) < 100:
-                pbar.set_postfix(reward=np.mean(record_reward))
-            else:
-                pbar.set_postfix(reward=np.mean(record_reward[-100:]))
+            pbar.set_postfix({
+                "reward": f"{np.mean(record_reward[-100:]):.2f}",
+                "y": f"{np.mean(total_y):.2f}",
+                "cost": f"{np.mean(total_cost):.2f}",
+                "delay": f"{np.mean(total_delay['t_all']):.2f}",
+            })
             pbar.update(1)
 
     envs.close()

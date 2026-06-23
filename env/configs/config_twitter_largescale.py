@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 class EnvConfig:
@@ -69,7 +70,8 @@ class EnvConfig:
         self.norm_adv = True
 
         # 训练配置
-        self.device = "cuda:1"
+        # device 可用 AUTOSCALING_DEVICE 环境变量覆盖（默认 cuda:1），便于两块卡并行跑两组训练
+        self.device = os.environ.get("AUTOSCALING_DEVICE", "cuda:1")
         self.model_path = "model"
         self.is_las = False  # 是否展平输出而不采用多输出头
         self.num_steps = self.time_slot_end - self.time_slot_start
@@ -84,7 +86,7 @@ class EnvConfig:
         # 奖励配置
         self.penalty = -1
         self.y_weight = 0.2
-        self.y_weight_train = 0.05
+        self.y_weight_train = 0.1
         self.reward_shaping_record_epoch = 100
 
         # Ablation flags

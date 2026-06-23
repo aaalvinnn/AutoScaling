@@ -654,7 +654,12 @@ def train(resume_dir=None):
                 
                 # tqdm update
                 tqdm_records.append(np.sum(total_reward))
-                pbar.set_postfix(reward=np.mean(tqdm_records[-100:]))
+                pbar.set_postfix({
+                    "reward": f"{np.mean(tqdm_records[-100:]):.2f}",
+                    "y": f"{np.mean(total_y):.2f}",
+                    "cost": f"{np.mean(total_cost):.2f}",
+                    "delay": f"{np.mean(total_delay['t_all']):.2f}",
+                })
                 pbar.update(1)
 
                 # reset data
