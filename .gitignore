@@ -3,14 +3,13 @@ __pycache__/
 /test_output
 /model
 /release
-*.pdf
 /trained_models
 trained_models.tar
 /trained_models
 
 *.pyc
-*.pdf
 *.npy
 *.tar
 *.log
 /logs
+/train_logs

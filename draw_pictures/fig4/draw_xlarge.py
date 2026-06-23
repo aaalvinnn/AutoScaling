@@ -1,8 +1,8 @@
-""" 20 节点 (twitter_xlargescale) 逐时隙延迟与开销曲线 —— fig4 风格。
+""" 20 节点逐时隙延迟与开销曲线 —— fig4 风格（twitter + alibaba _deep）。
 
-读 test_output/twitter_xlargescale/data/{agent}/t_all.npy 与 cost.npy，
-画 Latency (14x4) 与 Cost (7x5) 折线图，并把逐 step 数据 + 汇总统计存成 JSON，
-全部输出到 draw_pictures/fig4/。
+读 test_output/{config}/data/{agent}/t_all.npy 与 cost.npy（由 eval_xlarge_deep.py 生成），
+画 Latency (14x4) 与 Cost (7x5) 折线图 + 存 JSON，输出到 draw_pictures/fig4/。
+LGDRL = 4 层 _deep 模型，DeepScaler = model_1000（与 10 节点约定一致）。
 """
 import json
 import os
@@ -19,9 +19,12 @@ line_zorder = 3
 grid_zorder = 0
 markersize = 2.5
 
-dataset = "twitter"
-scale = "XLarge Scale"                       # 20 节点场景标签
-config_name = "twitter_xlargescale"
+scale = "XLarge Scale"
+# (config_name, dataset 标签) —— 两个 20 节点 _deep 场景
+CONFIGS = [
+    ("twitter_xlargescale_deep", "twitter"),
+    ("alibaba_xlargescale_deep", "alibaba"),
+]
 
 # 5 个对比算法（顺序、颜色、线型、图例标签 与 fig4 一致）
 agents = ['RL Agent', 'Proscale', 'HPA', 'DeepScaler', 'LGDRL']
@@ -31,15 +34,19 @@ linestyles = ['--', '--', '--', '--', '-.']
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(current_dir))
-data_path = os.path.join(ROOT, "test_output", config_name, "data")
 
 
-def _load(metric):
-    return {a: np.load(os.path.join(data_path, a, f"{metric}.npy")) for a in agents}
+def _data_dir(config_name):
+    return os.path.join(ROOT, "test_output", config_name, "data")
 
 
-def draw_latency():
-    datas = _load("t_all")
+def _load(config_name, metric):
+    dp = _data_dir(config_name)
+    return {a: np.load(os.path.join(dp, a, f"{metric}.npy")) for a in agents}
+
+
+def draw_latency(config_name, dataset):
+    datas = _load(config_name, "t_all")
     plt.figure(figsize=(14, 4))
     for i, a in enumerate(agents):
         plt.plot(datas[a], label=labels[i], color=colors[i], linewidth=line_width,
@@ -57,8 +64,8 @@ def draw_latency():
     return out
 
 
-def draw_cost():
-    datas = _load("cost")
+def draw_cost(config_name, dataset):
+    datas = _load(config_name, "cost")
     plt.figure(figsize=(7, 5))
     for i, a in enumerate(agents):
         plt.plot(datas[a], label=labels[i], color=colors[i], linewidth=line_width,
@@ -76,27 +83,18 @@ def draw_cost():
     return out
 
 
-def dump_json():
-    """逐 step 数据 + 汇总统计存 JSON。"""
-    t_all = _load("t_all")
-    cost = _load("cost")
+def dump_json(config_name, dataset):
+    t_all = _load(config_name, "t_all")
+    cost = _load(config_name, "cost")
     payload = {
-        "config": config_name,
-        "scale": scale,
+        "config": config_name, "scale": scale,
         "steps": int(next(iter(t_all.values())).shape[0]),
         "agents": labels,
-        "per_step": {
-            labels[i]: {
-                "t_all": t_all[a].tolist(),
-                "cost": cost[a].tolist(),
-            } for i, a in enumerate(agents)
-        },
-        "summary": {
-            labels[i]: {
-                "t_all_mean": float(t_all[a].mean()), "t_all_std": float(t_all[a].std()),
-                "cost_mean": float(cost[a].mean()), "cost_std": float(cost[a].std()),
-            } for i, a in enumerate(agents)
-        },
+        "per_step": {labels[i]: {"t_all": t_all[a].tolist(), "cost": cost[a].tolist()}
+                     for i, a in enumerate(agents)},
+        "summary": {labels[i]: {"t_all_mean": float(t_all[a].mean()), "t_all_std": float(t_all[a].std()),
+                                "cost_mean": float(cost[a].mean()), "cost_std": float(cost[a].std())}
+                    for i, a in enumerate(agents)},
     }
     out = os.path.join(current_dir, f"data_{config_name}.json")
     with open(out, "w") as f:
@@ -105,15 +103,15 @@ def dump_json():
 
 
 if __name__ == '__main__':
-    assert os.path.isdir(data_path), f"数据目录不存在: {data_path}\n先跑: python main.py --config " + config_name
-    p1 = draw_latency()
-    p2 = draw_cost()
-    p3 = dump_json()
-    print(f"Latency → {p1}")
-    print(f"Cost    → {p2}")
-    print(f"JSON    → {p3}")
-    print("\n汇总 (mean ± std):")
-    import json as _j
-    d = _j.load(open(p3))
-    for a, s in d["summary"].items():
-        print(f"  {a:12s} latency={s['t_all_mean']:6.2f}±{s['t_all_std']:.2f}  cost={s['cost_mean']:6.2f}±{s['cost_std']:.2f}")
+    for config_name, dataset in CONFIGS:
+        dp = _data_dir(config_name)
+        assert os.path.isdir(dp), f"数据目录不存在: {dp}\n先跑 eval_xlarge_deep.py 生成 per-step npy"
+        p1 = draw_latency(config_name, dataset)
+        p2 = draw_cost(config_name, dataset)
+        p3 = dump_json(config_name, dataset)
+        print(f"[{dataset}] Latency → {p1}")
+        print(f"[{dataset}] Cost    → {p2}")
+        print(f"[{dataset}] JSON    → {p3}")
+        for a, s in json.load(open(p3))["summary"].items():
+            print(f"  {a:12s} latency={s['t_all_mean']:6.2f}±{s['t_all_std']:.2f}  cost={s['cost_mean']:6.2f}±{s['cost_std']:.2f}")
+        print()
