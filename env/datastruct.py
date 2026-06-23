@@ -3,10 +3,14 @@ import numpy as np
 import random
 from configs import config_sin_smallscale, config_sin_middlescale, config_sin_largescale
 from configs import config_sin_xlargescale
+from env.configs import config_sin_xlargescale_rsr
 from env.configs import config_twitter_largescale, config_twitter_middlescale, config_twitter_smallscale
 from env.configs import config_twitter_xlargescale
 from env.configs import config_twitter_xlargescale_rsr
+from env.configs import config_twitter_xlargescale_deep
 from env.configs import config_alibaba_largescale, config_alibaba_xlargescale
+from env.configs import config_alibaba_xlargescale_rsr
+from env.configs import config_alibaba_xlargescale_deep
 
 
 CONFIG_REGISTRY = {
@@ -14,13 +18,17 @@ CONFIG_REGISTRY = {
     "sin_middlescale": config_sin_middlescale.EnvConfig,
     "sin_largescale": config_sin_largescale.EnvConfig,
     "sin_xlargescale": config_sin_xlargescale.EnvConfig,
+    "sin_xlargescale_rsr": config_sin_xlargescale_rsr.EnvConfig,
     "twitter_smallscale": config_twitter_smallscale.EnvConfig,
     "twitter_middlescale": config_twitter_middlescale.EnvConfig,
     "twitter_largescale": config_twitter_largescale.EnvConfig,
     "twitter_xlargescale": config_twitter_xlargescale.EnvConfig,
     "twitter_xlargescale_rsr": config_twitter_xlargescale_rsr.EnvConfig,
+    "twitter_xlargescale_deep": config_twitter_xlargescale_deep.EnvConfig,
     "alibaba_largescale": config_alibaba_largescale.EnvConfig,
     "alibaba_xlargescale": config_alibaba_xlargescale.EnvConfig,
+    "alibaba_xlargescale_rsr": config_alibaba_xlargescale_rsr.EnvConfig,
+    "alibaba_xlargescale_deep": config_alibaba_xlargescale_deep.EnvConfig,
 }
 
 
