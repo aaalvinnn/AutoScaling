@@ -170,7 +170,9 @@ plt.savefig(pdf_path, format="pdf")
 plt.savefig(pdf_path.replace(".pdf", ".png"), format="png", dpi=150)
 plt.close()
 
-json_path = os.path.join(current_dir, f"data_convergence_ffd_ablation_{DATASET}.json")
+# JSON 落进 data/（与逐 epoch 原始数据同放，便于 release 复现）
+os.makedirs(os.path.join(current_dir, "data"), exist_ok=True)
+json_path = os.path.join(current_dir, "data", f"data_convergence_ffd_ablation_{DATASET}.json")
 with open(json_path, "w") as f:
     json.dump(payload, f, indent=2)
 

@@ -22,8 +22,10 @@ alpha = 1
 dataset = "sin"
 # dataset = "twitter"
 
+# 本地 data/ 副本（delta=1/2/3 扫描的逐时隙 npy，原始在 test_output/twitter_largescale/data/）
+_current_dir = os.path.dirname(os.path.abspath(__file__))
 twitter_data_path = {
-    "Large Scale": "test_output/twitter_largescale/data/"
+    "Large Scale": os.path.join(_current_dir, "data") + os.sep
 }
 
 data_path = twitter_data_path

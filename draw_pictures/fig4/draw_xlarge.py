@@ -37,7 +37,8 @@ ROOT = os.path.dirname(os.path.dirname(current_dir))
 
 
 def _data_dir(config_name):
-    return os.path.join(ROOT, "test_output", config_name, "data")
+    # 本地 data/ 副本（原始 per-step npy 由 eval_xlarge_deep.py 生成到 test_output/）
+    return os.path.join(current_dir, "data", config_name)
 
 
 def _load(config_name, metric):
@@ -96,7 +97,8 @@ def dump_json(config_name, dataset):
                                 "cost_mean": float(cost[a].mean()), "cost_std": float(cost[a].std())}
                     for i, a in enumerate(agents)},
     }
-    out = os.path.join(current_dir, f"data_{config_name}.json")
+    os.makedirs(os.path.join(current_dir, "data"), exist_ok=True)
+    out = os.path.join(current_dir, "data", f"data_{config_name}.json")
     with open(out, "w") as f:
         json.dump(payload, f, indent=2)
     return out

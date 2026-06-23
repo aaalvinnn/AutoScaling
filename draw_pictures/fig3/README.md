@@ -8,11 +8,15 @@
 
 | 文件 | 内容 |
 |------|------|
-| `Train.pdf` | 三条训练收敛曲线合并在一张图中（Twitter + Sin + Alibaba） |
+| `Train.pdf` | 10 节点三场景训练收敛合并图（Twitter + Sin + Alibaba） |
+| `Convergence-twitter-xlarge.pdf` | 20 节点 Twitter 三方法（LGDRL/DeepScaler/SAC）收敛对比 |
+| `Convergence-twitter-xlarge-deep.pdf` | 20 节点 LGDRL「4 层 + 20000 epoch」容量实验收敛曲线 |
 
 ## 绘图脚本
 
-- `draw.py` — 从 TensorBoard 日志和 JSON 文件中读取训练 reward 数据
+- `draw.py` — 10 节点三场景收敛图（读 `data/0603/*.json` + alibaba 的 TensorBoard）
+- `draw_xlarge_methods.py` — 20 节点 Twitter 三方法收敛对比（纯 Python 解析 tfevents），JSON 落 `data/data_convergence_twitter_xlargescale.json`
+- `draw_xlarge_twitter_deep.py` — 20 节点 LGDRL 4 层长训收敛，JSON 落 `data/data_convergence_twitter_xlarge_deep.json`
 
 ## 数据来源
 
@@ -30,7 +34,8 @@
 
 ## 其他文件
 
-- `data/` — 训练日志原始数据（JSON 格式）
+- `data/0603/*.json` — 10 节点 Twitter/Sin 训练日志（历史 JSON 格式）
+- `data/data_convergence_twitter_xlarge{,scale,deep}*.json` — 20 节点收敛曲线逐 epoch 数据（release 复现）
 - `DeepScaler_*.png` — DeepScaler baseline 的收敛曲线调试图（非论文用图）
 
 ## 相比原稿（Major Revision 前）的变化

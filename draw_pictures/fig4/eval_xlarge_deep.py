@@ -124,7 +124,8 @@ for ds_name in ["twitter", "alibaba"]:
         print(f"  LGDRL-3L(冻结,twitter原3层) delay={lg3['delay']:.2f}  cost={lg3['cost']:.2f}  RSR={lg3['rsr']:.3f}", flush=True)
 
 out_dir = os.path.join(REPO, "draw_pictures/fig4")
-with open(os.path.join(out_dir, "xlarge_deep_comparison.json"), "w") as f:
+os.makedirs(os.path.join(out_dir, "data"), exist_ok=True)
+with open(os.path.join(out_dir, "data", "xlarge_deep_comparison.json"), "w") as f:
     json.dump(results, f, indent=2)
 
 # ── 绘图：3 子图 (delay/cost/RSR)，按数据集分组，组内各方法柱 ─────────────────

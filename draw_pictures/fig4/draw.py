@@ -20,13 +20,13 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(current_dir))
 
 sin_paths = {
-    "Large Scale": os.path.join(ROOT, "test_output/sin_largescale/data/"),
+    "Large Scale": os.path.join(current_dir, "data/sin_largescale/"),
 }
 twitter_paths = {
-    "Large Scale": os.path.join(ROOT, "test_output/twitter_largescale/data/"),
+    "Large Scale": os.path.join(current_dir, "data/twitter_largescale/"),
 }
 alibaba_paths = {
-    "Large Scale": os.path.join(ROOT, "test_output/alibaba_largescale/data/"),
+    "Large Scale": os.path.join(current_dir, "data/alibaba_largescale/"),
 }
 
 if dataset == "sin":

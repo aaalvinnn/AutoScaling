@@ -11,11 +11,18 @@
 | `sin-Large Scale.pdf` | Sin 大规模场景（10 节点 / 10 微服务）的 5 算法对比 |
 | `twitter-Large Scale.pdf` | Twitter 大规模场景的 5 算法对比 |
 | `alibaba-Large Scale.pdf` | Alibaba 大规模场景的 5 算法对比 |
+| `twitter-XLarge Scale.pdf` | Twitter **20 节点**场景（`twitter_xlargescale_deep`）的 5 算法对比 |
 
 ## 绘图脚本
 
-- `draw.py` — 当前版本，读取 `test_output/{dataset}_largescale/data/` 下各 agent 的 `.npy` 测试结果
+- `draw.py` — 10 节点版，切换顶部 `DATASET`（`sin`/`twitter`/`alibaba`），读本地 `data/{dataset}_largescale/<agent>/{t_all,cost,request_success_rate}.npy`
+- `draw_xlarge_twitter.py` — Twitter 20 节点版，读本地 `data/twitter_xlargescale_deep/<agent>/*.npy`（原始 per-step npy 由 `fig4/eval_xlarge_deep.py` 生成）
 - `draw_old.py` — 原稿版本（保留备查），仅支持 Sin/Twitter，4 个 agent，3 张独立子图
+
+## 数据来源
+
+- `data/{sin,twitter,alibaba}_largescale/<agent>/*.npy` — 10 节点三数据集各 agent 逐时隙指标（从 `test_output/` 复制，供 release 复现）
+- `data/twitter_xlargescale_deep/<agent>/*.npy` — 20 节点 Twitter 各 agent 指标
 
 ## 对比算法
 

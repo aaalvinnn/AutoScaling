@@ -17,9 +17,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(current_dir))
 
 datasets = [
-    ("Twitter", os.path.join(ROOT, "data/loads-twitter.txt"), "#376eae"),
-    ("Sin",     os.path.join(ROOT, "data/loads-sin.txt"),     "#449945"),
-    ("Alibaba", os.path.join(ROOT, "data/loads-alibaba-v2022.txt"), "#c22f2f"),
+    ("Twitter", os.path.join(current_dir, "data/loads-twitter.txt"), "#376eae"),
+    ("Sin",     os.path.join(current_dir, "data/loads-sin.txt"),     "#449945"),
+    ("Alibaba", os.path.join(current_dir, "data/loads-alibaba-v2022.txt"), "#c22f2f"),
 ]
 
 fig, ax = plt.subplots(figsize=(14, 4))

@@ -6,18 +6,32 @@
 
 ## 生成文件
 
+### 10 节点（切换 `draw.py` 顶部 `dataset`）
+
 | 文件 | 内容 |
 |------|------|
-| `Latency-sin-Large Scale.pdf` | Sin 场景各算法逐时隙延迟对比 |
-| `Cost-sin-Large Scale.pdf` | Sin 场景各算法逐时隙开销对比 |
-| `Latency-twitter-Large Scale.pdf` | Twitter 场景各算法逐时隙延迟对比 |
-| `Cost-twitter-Large Scale.pdf` | Twitter 场景各算法逐时隙开销对比 |
-| `Latency-alibaba-Large Scale.pdf` | Alibaba 场景各算法逐时隙延迟对比 |
-| `Cost-alibaba-Large Scale.pdf` | Alibaba 场景各算法逐时隙开销对比 |
+| `Latency-{sin,twitter,alibaba}-Large Scale.pdf` | 各场景各算法逐时隙延迟对比 |
+| `Cost-{sin,twitter,alibaba}-Large Scale.pdf` | 各场景各算法逐时隙开销对比 |
+
+### 20 节点（`twitter`/`alibaba` `_xlargescale_deep`）
+
+| 文件 | 内容 |
+|------|------|
+| `Latency-twitter-XLarge Scale.pdf` / `Cost-twitter-XLarge Scale.pdf` | 20 节点 Twitter 逐时隙延迟/开销 |
+| `Latency-alibaba-XLarge Scale.pdf` / `Cost-alibaba-XLarge Scale.pdf` | 20 节点 Alibaba 逐时隙延迟/开销 |
+| `xlarge_deep_comparison.pdf` | 20 节点 LGDRL-4L vs baseline 的 delay/cost/RSR 分组柱状图 |
 
 ## 绘图脚本
 
-- `draw.py` — 通过切换 `dataset` 变量（`"sin"` / `"twitter"` / `"alibaba"`）生成不同场景的图表
+- `draw.py` — 10 节点版，切换 `dataset`（`sin`/`twitter`/`alibaba`），读本地 `data/{dataset}_largescale/<agent>/{t_all,cost}.npy`
+- `draw_xlarge.py` — 20 节点 `_deep` 逐时隙图，读本地 `data/{twitter,alibaba}_xlargescale_deep/<agent>/*.npy`，JSON 落 `data/data_{config}.json`
+- `eval_xlarge_deep.py` — 20 节点 eval 管线：跑各 agent 288 步生成 per-step npy（→ `test_output/`）+ 画 `xlarge_deep_comparison` 柱状图，JSON 落 `data/xlarge_deep_comparison.json`
+
+## 数据来源
+
+- `data/{sin,twitter,alibaba}_largescale/<agent>/*.npy` — 10 节点逐时隙指标（从 `test_output/` 复制，供 release 复现）
+- `data/{twitter,alibaba}_xlargescale_deep/<agent>/*.npy` — 20 节点逐时隙指标
+- `data/data_*.json` / `data/xlarge_deep_comparison.json` — 逐 step 数据 + 汇总统计
 
 ## 对比算法
 

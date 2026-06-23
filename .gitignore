@@ -13,3 +13,7 @@ trained_models.tar
 *.log
 /logs
 /train_logs
+
+# 例外：draw_pictures 各子目录的 data/ 是图表 release 复现数据，强制入库（覆盖上面 *.npy）
+!draw_pictures/**/data/
+!draw_pictures/**/data/**

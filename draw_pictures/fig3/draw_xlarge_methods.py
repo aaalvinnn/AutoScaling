@@ -144,7 +144,7 @@ pdf_path = os.path.join(current_dir, "Convergence-twitter-xlarge.pdf")
 plt.savefig(pdf_path, format="pdf")
 plt.close()
 
-json_path = os.path.join(current_dir, "data_convergence_twitter_xlargescale.json")
+json_path = os.path.join(current_dir, "data", "data_convergence_twitter_xlargescale.json")
 with open(json_path, "w") as f:
     json.dump(payload, f, indent=2)
 

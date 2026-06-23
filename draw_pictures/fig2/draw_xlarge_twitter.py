@@ -20,8 +20,8 @@ ROOT = os.path.dirname(os.path.dirname(current_dir))
 
 DATASET = "twitter"
 SCALE = "XLarge Scale"
-# twitter 20节点数据目录（fig4 eval 产物）
-DATA_PATH = {SCALE: os.path.join(ROOT, "test_output/twitter_xlargescale_deep/data/")}
+# twitter 20节点数据目录（本地 data/ 副本，原始由 fig4/eval_xlarge_deep.py 生成）
+DATA_PATH = {SCALE: os.path.join(current_dir, "data/twitter_xlargescale_deep/")}
 
 # 顺序、图例标签、配色 与 fig2/draw.py 的 twitter 分支完全一致
 agents_all = ["RL Agent", "Proscale", "HPA", "DeepScaler", "LGDRL"]

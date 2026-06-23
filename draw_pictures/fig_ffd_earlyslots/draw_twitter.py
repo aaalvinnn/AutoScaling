@@ -6,7 +6,7 @@ Latency(t_all)/Cost，画：
   - Full 图：完整时隙曲线（看全貌）
 
 三条线：Full(MFFD init) / w/o FFD(random, retrain) / Full+no-FFD(only test)。
-数据自跑自存到 data_twitter/（alibaba 版读的是 fig6/data，twitter 没有现成 rollout，故本脚本自跑）。
+数据自跑自存到 data/（alibaba 版读的是 fig6/data，twitter 没有现成 rollout，故本脚本自跑）。
 """
 import os
 import sys
@@ -60,7 +60,7 @@ def make_config(**flags):
 file_keys = {"AutoLFD (MFFD init)": "full",
              "w/o FFD (random, retrain)": "no_ffd_retrained",
              "Full + no-FFD (only test)": "full_no_ffd"}
-data_dir = os.path.join(current_dir, "data_twitter")
+data_dir = os.path.join(current_dir, "data")
 os.makedirs(data_dir, exist_ok=True)
 
 t_all, cost = {}, {}

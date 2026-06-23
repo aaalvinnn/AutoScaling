@@ -126,7 +126,7 @@ plt.close()
 payload = {"config": "twitter_xlargescale_deep", "method": "Ours (LGDRL)",
            "epoch": np.linspace(0, 20000, len(data)).tolist(),
            "reward": data.tolist(), "summary": summary}
-json_path = os.path.join(current_dir, "data_convergence_twitter_xlarge_deep.json")
+json_path = os.path.join(current_dir, "data", "data_convergence_twitter_xlarge_deep.json")
 with open(json_path, "w") as f:
     json.dump(payload, f, indent=2)
 
