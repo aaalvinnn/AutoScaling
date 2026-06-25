@@ -13,13 +13,13 @@ sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'env'))
 
 fig_size = (7, 5)
-fontsize = 15
-legend_fontsize = 15
-label_size = 12
+fontsize = 24
+legend_fontsize = 21
+label_size = 24
 line_width = 1.5
 grid_zorder = 0
 alpha = 1
-markersize = 2
+markersize = 2.5
 
 ROOT = project_root
 
@@ -42,7 +42,7 @@ configs = [
 ]
 
 colors     = ["#c22f2f", "#8E6EC8"]
-linestyles = ['-',      '--']
+linestyles = ['--',     '--']
 labels     = ["AutoLFD (Full)", "w/o Lyapunov"]
 ORDER      = ["AutoLFD (Full)", "w/o Lyapunov"]
 
@@ -93,7 +93,7 @@ def draw_latency():
     plt.yticks(fontsize=label_size)
     plt.ylabel('Delay', fontsize=fontsize)
     plt.xlabel("Timeslot", fontsize=fontsize)
-    plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper right')
+    plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
     plt.tight_layout()
     plt.grid(True, zorder=grid_zorder)
     for fmt in ["pdf", "png"]:
@@ -110,8 +110,8 @@ def draw_cost():
         arr = all_data[name]["cost"]
         plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
                  linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
-    plt.axhline(configs[0][1].C, color="#222222", linestyle=":", linewidth=line_width,
-                label=f"Budget C={configs[0][1].C}")
+    plt.axhline(configs[0][1].C, color="black", linestyle="--", linewidth=2.5,
+                label=r"Budget $\tilde{C}$=" + f"{configs[0][1].C}")
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize)

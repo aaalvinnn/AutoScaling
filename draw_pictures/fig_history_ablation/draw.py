@@ -13,13 +13,13 @@ sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'env'))
 
 fig_size = (7, 5)
-fontsize = 15
-legend_fontsize = 15
-label_size = 12
+fontsize = 24
+legend_fontsize = 21
+label_size = 24
 line_width = 1.5
 grid_zorder = 0
 alpha = 1
-markersize = 2
+markersize = 2.5
 
 ROOT = project_root
 
@@ -42,7 +42,7 @@ configs = [
 ]
 
 colors     = ["#c22f2f", "#449945", "#376eae"]
-linestyles = ['-',       '--',      '-.']
+linestyles = ['--',      '--',      '--']
 labels     = ["AutoLFD (Full)", "Oracle (known current)", "w/o History"]
 ORDER      = ["AutoLFD (Full)", "Oracle", "w/o History"]
 
@@ -97,7 +97,7 @@ def draw_cost():
                  linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
     plt.xticks(fontsize=label_size); plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize); plt.xlabel("Timeslot", fontsize=fontsize)
-    plt.legend(frameon=True, fontsize=legend_fontsize, loc='lower right')
+    plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
     plt.tight_layout(); plt.grid(True, zorder=grid_zorder)
     for fmt in ["pdf", "png"]:
         plt.savefig(os.path.join(current_dir, f"Cost-history-ablation-twitter.{fmt}"),

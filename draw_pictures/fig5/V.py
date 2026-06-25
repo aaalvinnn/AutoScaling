@@ -64,15 +64,17 @@ def draw_fig1():
 
     for i, agent in enumerate(datas.keys()):
         if agent == "LGDRL":
-            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder)
+            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder,
+                     linestyle='--', marker='o', markersize=2.5)
         else:
-            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder, alpha=alpha)
+            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder, alpha=alpha,
+                     linestyle='--', marker='o', markersize=2.5)
 
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Latency', fontsize=fontsize)
     plt.xlabel("Timeslot", fontsize=fontsize)
-    plt.legend(frameon=True, fontsize=lengend_fontsize, loc='upper right')
+    plt.legend(frameon=True, fontsize=lengend_fontsize, loc='upper left')
     plt.tight_layout()
     plt.grid(True, zorder=grid_zorder)
 
@@ -97,9 +99,11 @@ def draw_fig2():
 
     for i, agent in enumerate(datas.keys()):
         if agent == "LGDRL":
-            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder)
+            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder,
+                     linestyle='--', marker='o', markersize=2.5)
         else:
-            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder, alpha=alpha)
+            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder, alpha=alpha,
+                     linestyle='--', marker='o', markersize=2.5)
 
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
@@ -130,15 +134,17 @@ def draw_fig3():
 
     for i, agent in enumerate(datas.keys()):
         if agent == "LGDRL":
-            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder)
+            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder,
+                     linestyle='--', marker='o', markersize=2.5)
         else:
-            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder, alpha=alpha)
+            plt.plot(datas[agent], label=agent, color=colors[i], linewidth=line_width, zorder=line_zorder, alpha=alpha,
+                     linestyle='--', marker='o', markersize=2.5)
 
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize)
     plt.xlabel("Timeslot", fontsize=fontsize)
-    plt.legend(frameon=True, fontsize=lengend_fontsize, loc='upper right')
+    plt.legend(frameon=True, fontsize=lengend_fontsize, loc='upper left')
     plt.tight_layout()
     plt.grid(True, zorder=grid_zorder)
 
@@ -208,7 +214,7 @@ def draw_training_lines():
     plt.ylabel('Reward', fontsize=fontsize, zorder=line_zorder)
     plt.grid(True, zorder=grid_zorder)
     plt.tight_layout()
-    plt.legend(frameon=True, fontsize=lengend_fontsize, loc='lower right')
+    plt.legend(frameon=True, fontsize=lengend_fontsize, loc='upper left')
     save_path = os.path.join(current_dir, "Train-V.pdf")
     plt.savefig(save_path, format="pdf")
 

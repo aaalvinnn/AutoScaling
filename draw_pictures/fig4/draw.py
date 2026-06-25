@@ -38,7 +38,7 @@ else:
 
 scale = "Large Scale"
 colors = ["#449945", "#f8c91c", "#376eae", "#8E6EC8", "#c22f2f"]
-linestyles = ['--', '--', '--', '--', '-.']
+linestyles = ['--', '--', '--', '--', '--']
 
 def draw_latency():
     datas = {'RL Agent': None, 'Proscale': None, 'HPA': None, 'DeepScaler': None, 'LGDRL': None}
@@ -69,7 +69,7 @@ def draw_cost():
     plt.figure(figsize=(7, 5))
     for i, agent in enumerate(datas):
         plt.plot(datas[agent], label=strs[i], color=colors[i], linewidth=line_width, zorder=line_zorder,
-                 linestyle=linestyles[i])
+                 linestyle=linestyles[i], marker='o', markersize=markersize)
 
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)

@@ -59,7 +59,8 @@ def draw_fig1():
     plt.figure(figsize=(7, 5))
 
     for i, key in enumerate(datas.keys()):
-        plt.plot(datas[key], label=r"$N_{\mathrm{change}}$"+f"=[-{key.split('=')[1]},{key.split('=')[1]}]", color=colors[i], linewidth=line_width, zorder=line_zorder)
+        plt.plot(datas[key], label=r"$N_{\mathrm{change}}$"+f"=[-{key.split('=')[1]},{key.split('=')[1]}]", color=colors[i],
+                 linewidth=line_width, zorder=line_zorder, linestyle='--', marker='o', markersize=2.5)
 
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
@@ -89,7 +90,8 @@ def draw_fig2():
     plt.figure(figsize=(7, 5))
 
     for i, key in enumerate(datas.keys()):
-        plt.plot(datas[key], label=r"$N_{\mathrm{change}}$"+f"=[-{key.split('=')[1]},{key.split('=')[1]}]", color=colors[i], linewidth=line_width, zorder=line_zorder)
+        plt.plot(datas[key], label=r"$N_{\mathrm{change}}$"+f"=[-{key.split('=')[1]},{key.split('=')[1]}]", color=colors[i],
+                 linewidth=line_width, zorder=line_zorder, linestyle='--', marker='o', markersize=2.5)
 
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
@@ -119,7 +121,8 @@ def draw_fig3():
     plt.figure(figsize=(7, 5))
 
     for i, key in enumerate(datas.keys()):
-        plt.plot(datas[key], label=r"$N_{\mathrm{change}}$"+f"=[-{key.split('=')[1]},{key.split('=')[1]}]", color=colors[i], linewidth=line_width, zorder=line_zorder)
+        plt.plot(datas[key], label=r"$N_{\mathrm{change}}$"+f"=[-{key.split('=')[1]},{key.split('=')[1]}]", color=colors[i],
+                 linewidth=line_width, zorder=line_zorder, linestyle='--', marker='o', markersize=2.5)
 
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)

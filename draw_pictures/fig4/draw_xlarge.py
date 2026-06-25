@@ -30,7 +30,7 @@ CONFIGS = [
 agents = ['RL Agent', 'Proscale', 'HPA', 'DeepScaler', 'LGDRL']
 labels = ['RL Agent', 'Proscale', 'PPA', 'DeepScaler', 'Ours']
 colors = ["#449945", "#f8c91c", "#376eae", "#8E6EC8", "#c22f2f"]
-linestyles = ['--', '--', '--', '--', '-.']
+linestyles = ['--', '--', '--', '--', '--']
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(current_dir))
@@ -70,7 +70,7 @@ def draw_cost(config_name, dataset):
     plt.figure(figsize=(7, 5))
     for i, a in enumerate(agents):
         plt.plot(datas[a], label=labels[i], color=colors[i], linewidth=line_width,
-                 zorder=line_zorder, linestyle=linestyles[i])
+                 zorder=line_zorder, linestyle=linestyles[i], marker='o', markersize=markersize)
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize)
