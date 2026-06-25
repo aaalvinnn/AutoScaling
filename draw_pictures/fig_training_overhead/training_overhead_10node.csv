@@ -1,4 +1,4 @@
 Scenario,Method,Training Epochs,Convergence Epoch,Convergence Time (h),Total Training Time (h),SPS,Decision Mean (ms),Decision P95 (ms),Model Size
-twitter_largescale,AutoLFD (LGDRL),20000,11064,9.62,17.58,1452,1.027,1.067,2.51 MB
-twitter_largescale,SAC,4393,676,0.44,26.70,27,0.559,0.587,2.47 MB
-twitter_largescale,DeepScaler,10000,4701,8.84,18.98,668,1.513,1.562,3.63 MB
+twitter_largescale,AutoLFD (LGDRL),20000,11064,9.62,17.58,1452,1.715,4.447,2.51 MB
+twitter_largescale,SAC,4393,676,0.44,26.70,27,2.717,3.427,2.47 MB
+twitter_largescale,DeepScaler,10000,4701,8.84,18.98,668,2.087,3.681,3.63 MB

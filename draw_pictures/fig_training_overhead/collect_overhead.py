@@ -33,8 +33,15 @@ ARCHIVE_ROOT = Path("/home/zsw/Papers/AutoScaling_0619/AutoScaling")
 LGDRL_RUN_DIR = ROOT / "model" / CONFIG_NAME / "0530" / "1829" / "PPO_dnn"
 SAC_RUN_DIR = ARCHIVE_ROOT / "model" / CONFIG_NAME / "0531" / "1355" / "SAC"
 DEEPSCALER_RUN_DIR = ARCHIVE_ROOT / "model" / CONFIG_NAME / "0607" / "1653" / "DeepScaler"
+TEN_NODE_LATENCY_PATH = ARCHIVE_ROOT / "test_output" / CONFIG_NAME / "latency.npy"
 TWENTY_NODE_RUN_DIR = ROOT / "model" / TWENTY_NODE_CONFIG_NAME / "0619" / "2040"
 TWENTY_NODE_LATENCY_PATH = ROOT / "test_output" / TWENTY_NODE_CONFIG_NAME / "latency.npy"
+# NOTE: use the cold-start run 0529/2157, NOT 0531/1359. 0531/1359 is a warm-start
+# resume (its charts/y begins already-converged at y≈9.43 = the 0529/2157 end value),
+# so its "convergence time" (1.41 h) is bogus. The real cold-start curve (41.4→9.4)
+# converges at epoch 6361 ≈ 5.10 h. Run lives on the 0619 archive (not copied locally).
+SIN_LGDRL_RUN_DIR = ARCHIVE_ROOT / "model" / "sin_largescale" / "0529" / "2157" / "PPO_dnn"
+ALIBABA_LGDRL_RUN_DIR = ROOT / "model" / "alibaba_largescale" / "0602" / "1440" / "PPO_dnn"
 
 RUNS = {
     "LGDRL": {
@@ -42,18 +49,21 @@ RUNS = {
         "tb_dir": LGDRL_RUN_DIR,
         "model_path": LGDRL_RUN_DIR / "model_dnn_best.pth",
         "agent_type": "PPO",
+        "latency_key": "LGDRL",
     },
     "SAC": {
         "method": "SAC",
         "tb_dir": SAC_RUN_DIR,
         "model_path": SAC_RUN_DIR / "model.pth",
         "agent_type": "SAC",
+        "latency_key": "RL Agent",
     },
     "DeepScaler": {
         "method": "DeepScaler",
         "tb_dir": DEEPSCALER_RUN_DIR,
         "model_path": DEEPSCALER_RUN_DIR / "model_best.pth",
         "agent_type": "DeepScaler",
+        "latency_key": "DeepScaler",
     },
 }
 
@@ -81,6 +91,33 @@ TWENTY_NODE_RUNS = {
     },
 }
 
+PAPER_SUMMARY_RUNS = {
+    "Sin": {
+        "scenario": "sin_largescale",
+        "tb_dir": SIN_LGDRL_RUN_DIR,
+        "latency_path": ARCHIVE_ROOT / "test_output" / "sin_largescale" / "latency.npy",
+        "latency_key": "LGDRL",
+    },
+    "Alibaba": {
+        "scenario": "alibaba_largescale",
+        "tb_dir": ALIBABA_LGDRL_RUN_DIR,
+        "latency_path": ARCHIVE_ROOT / "test_output" / "alibaba_largescale" / "latency.npy",
+        "latency_key": "LGDRL",
+    },
+    "Twitter": {
+        "scenario": "twitter_largescale",
+        "tb_dir": LGDRL_RUN_DIR,
+        "latency_path": TEN_NODE_LATENCY_PATH,
+        "latency_key": "LGDRL",
+    },
+    "Twitter(20)": {
+        "scenario": "twitter_xlargescale",
+        "tb_dir": TWENTY_NODE_RUN_DIR / "PPO_dnn",
+        "latency_path": TWENTY_NODE_LATENCY_PATH,
+        "latency_key": "LGDRL",
+    },
+}
+
 OUTPUTS = {
     "json": DATA_DIR / "overhead_10node.json",
     "latency": DATA_DIR / "decision_latency_10node.npy",
@@ -88,6 +125,7 @@ OUTPUTS = {
     "csv": OUT_DIR / "training_overhead_10node.csv",
     "tex": OUT_DIR / "training_overhead_10node.tex",
 }
+REQUIRED_SCALAR_TAGS = ("charts/y", "charts/SPS")
 
 
 # Config resolution happens at import time in env/datastruct.py. Set this before
@@ -176,15 +214,20 @@ def read_tfevents_scalars(tb_dir: Path) -> dict[str, list[dict[str, float]]]:
     by_tag_step: dict[str, dict[int, tuple[float, float]]] = {}
     for event_file in event_files:
         buf = event_file.read_bytes()
-        i = 0
+        pos = 0
         n = len(buf)
-        while i + 12 <= n:
-            length = struct.unpack("<Q", buf[i:i + 8])[0]
-            i += 12  # length + masked length CRC
-            if i + length + 4 > n:
+        while pos + 12 <= n:
+            try:
+                length = int(struct.unpack("<Q", buf[pos:pos + 8])[0])
+            except Exception:
                 break
-            event = buf[i:i + length]
-            i += length + 4  # data + masked data CRC
+            record_start = pos + 12  # length + masked length CRC
+            record_end = record_start + length
+            next_pos = record_end + 4  # data + masked data CRC
+            if record_end > n or next_pos > n:
+                break
+            event = buf[record_start:record_end]
+            pos = next_pos
 
             wall_time = None
             step = None
@@ -221,6 +264,38 @@ def read_tfevents_scalars(tb_dir: Path) -> dict[str, list[dict[str, float]]]:
             for step, (wall, value) in sorted(by_step.items())
         ]
     return result
+
+
+def read_required_scalars(tb_dir: Path) -> dict[str, list[dict[str, float]]]:
+    code = """
+import json
+import sys
+from pathlib import Path
+
+from draw_pictures.fig_training_overhead.collect_overhead import (
+    REQUIRED_SCALAR_TAGS,
+    read_tfevents_scalars,
+)
+
+scalars = read_tfevents_scalars(Path(sys.argv[1]))
+print(json.dumps({tag: scalars.get(tag, []) for tag in REQUIRED_SCALAR_TAGS}))
+"""
+    last_proc = None
+    for _ in range(3):
+        proc = subprocess.run(
+            [sys.executable, "-B", "-c", code, str(tb_dir)],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0:
+            return json.loads(proc.stdout)
+        last_proc = proc
+        time.sleep(0.5)
+
+    stderr = (last_proc.stderr if last_proc else "").strip()
+    raise RuntimeError(f"Failed to read TensorBoard scalars from {tb_dir}: {stderr}")
 
 
 def trailing_mean(values: np.ndarray, window: int) -> np.ndarray:
@@ -436,7 +511,7 @@ def collect_training_rows(args: argparse.Namespace) -> tuple[list[dict[str, Any]
 
     for key, run in RUNS.items():
         tb_dir = Path(run["tb_dir"])
-        scalars = read_tfevents_scalars(tb_dir)
+        scalars = read_required_scalars(tb_dir)
         conv = convergence_stats(
             scalars.get("charts/y", []),
             smooth_window=args.smooth_window,
@@ -481,7 +556,7 @@ def collect_static_training_rows(
 
     for key, run in runs.items():
         tb_dir = Path(run["tb_dir"])
-        scalars = read_tfevents_scalars(tb_dir)
+        scalars = read_required_scalars(tb_dir)
         conv = convergence_stats(
             scalars.get("charts/y", []),
             smooth_window=args.smooth_window,
@@ -562,6 +637,29 @@ def attach_existing_latency(
     return latency_metadata
 
 
+def load_latency_arrays_for_runs(
+    runs: dict[str, dict[str, Any]],
+    latency_path: Path,
+) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    if not latency_path.exists():
+        raise FileNotFoundError(latency_path)
+
+    raw = np.load(latency_path, allow_pickle=True).item()
+    arrays: dict[str, np.ndarray] = {}
+    metadata: dict[str, Any] = {"path": relpath(latency_path), "keys": {}}
+    for run in runs.values():
+        key = str(run["latency_key"])
+        if key not in raw:
+            raise KeyError(f"{latency_path} has no latency key '{key}' for {run['method']}")
+        values = np.asarray(raw[key], dtype=float)
+        arrays[run["method"]] = values
+        metadata["keys"][run["method"]] = {
+            "latency_key": key,
+            "decision_steps": int(len(values)),
+        }
+    return arrays, metadata
+
+
 def attach_latency(rows: list[dict[str, Any]], latency_stats: dict[str, dict[str, Any]]) -> None:
     by_method = {RUNS[key]["method"]: stats for key, stats in latency_stats.items()}
     for row in rows:
@@ -586,6 +684,52 @@ def attach_latency_arrays(rows: list[dict[str, Any]], latency_arrays: dict[str, 
             "decision_p95_ms": float(np.percentile(arr, 95)),
             "decision_p99_ms": float(np.percentile(arr, 99)),
         })
+
+
+def collect_paper_summary_rows(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    rows = []
+    metadata: dict[str, Any] = {"sources": {}, "convergence_rule": {}, "latency": {}}
+
+    for label, run in PAPER_SUMMARY_RUNS.items():
+        tb_dir = Path(run["tb_dir"])
+        scalars = read_required_scalars(tb_dir)
+        conv = convergence_stats(
+            scalars.get("charts/y", []),
+            smooth_window=args.smooth_window,
+            tail_fraction=args.tail_fraction,
+            tolerance_fraction=args.tolerance_fraction,
+        )
+
+        latency_path = Path(run["latency_path"])
+        raw = np.load(latency_path, allow_pickle=True).item()
+        latency_key = str(run["latency_key"])
+        if latency_key not in raw:
+            raise KeyError(f"{latency_path} has no latency key '{latency_key}' for {label}")
+        values = np.asarray(raw[latency_key], dtype=float)
+
+        rows.append({
+            "scenario_label": label,
+            "scenario": run["scenario"],
+            "training_time_h": conv["convergence_time_h"],
+            "decision_mean_ms": float(np.mean(values)),
+            "decision_p95_ms": float(np.percentile(values, 95)),
+            "decision_steps": int(len(values)),
+            "convergence_epoch": conv["convergence_epoch"],
+            "training_epochs": conv["last_logged_epoch"],
+        })
+        metadata["sources"][label] = {
+            "tb_dir": relpath(tb_dir),
+            "latency_path": relpath(latency_path),
+            "latency_key": latency_key,
+        }
+        metadata["convergence_rule"][label] = conv
+        metadata["latency"][label] = {
+            "decision_steps": int(len(values)),
+            "decision_mean_ms": float(np.mean(values)),
+            "decision_p95_ms": float(np.percentile(values, 95)),
+        }
+
+    return rows, metadata
 
 
 def relpath(path: Path) -> str:
@@ -624,6 +768,17 @@ def display_rows(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
     return result
 
 
+def display_paper_summary_rows(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
+    result = []
+    for row in rows:
+        result.append({
+            "Scenario": row["scenario_label"],
+            "Training time (h)": fmt(row["training_time_h"], 2),
+            "Decision Time (ms)": fmt(row["decision_mean_ms"], 2),
+        })
+    return result
+
+
 def append_markdown_table(lines: list[str], rows: list[dict[str, Any]]) -> None:
     rendered = display_rows(rows)
     headers = list(rendered[0].keys())
@@ -635,20 +790,52 @@ def append_markdown_table(lines: list[str], rows: list[dict[str, Any]]) -> None:
         lines.append("| " + " | ".join(row[h] for h in headers) + " |")
 
 
-def write_markdown(rows: list[dict[str, Any]], path: Path, twenty_node_rows: list[dict[str, Any]] | None = None) -> None:
+def append_rendered_markdown_table(lines: list[str], rendered: list[dict[str, str]]) -> None:
+    headers = list(rendered[0].keys())
+    lines.extend([
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(["---"] * len(headers)) + " |",
+    ])
+    for row in rendered:
+        lines.append("| " + " | ".join(row[h] for h in headers) + " |")
+
+
+def write_markdown(
+    rows: list[dict[str, Any]],
+    path: Path,
+    twenty_node_rows: list[dict[str, Any]] | None = None,
+    paper_summary_rows: list[dict[str, Any]] | None = None,
+) -> None:
     lines = [
         "# Training Overhead",
+        "",
+    ]
+    if paper_summary_rows:
+        lines.extend([
+            "## Paper Summary",
+            "",
+            "This table reports AutoLFD convergence time and mean per-step decision time.",
+            "",
+        ])
+        append_rendered_markdown_table(lines, display_paper_summary_rows(paper_summary_rows))
+        lines.extend([
+            "",
+            "Training time is the convergence time detected from `charts/y`; decision time measures only `agent.get_action(state)` over 288 test slots.",
+            "",
+        ])
+
+    lines.extend([
         "",
         "## 10-node Twitter",
         "",
         "Scenario: `twitter_largescale` (`node_nums=10`, `ms_nums=10`).",
         "",
-    ]
+    ])
     append_markdown_table(lines, rows)
     lines.extend([
         "",
         "Decision latency measures only `agent.get_action(state)` over 288 test slots; environment `step()` time is excluded.",
-        "SAC and DeepScaler use archived 10-node runs under `/home/zsw/Papers/AutoScaling_0619/AutoScaling/model/twitter_largescale/`.",
+        "SAC and DeepScaler use archived 10-node runs under `/home/zsw/Papers/AutoScaling_0619/AutoScaling/model/twitter_largescale/`; decision latency comes from the matching archived `test_output/twitter_largescale/latency.npy`.",
         "",
     ])
 
@@ -755,6 +942,23 @@ def validate_static_rows(rows: list[dict[str, Any]], require_latency: bool = Fal
             )
 
 
+def validate_paper_summary_rows(rows: list[dict[str, Any]], expected_steps: int) -> None:
+    if len(rows) != len(PAPER_SUMMARY_RUNS):
+        raise RuntimeError(f"Expected {len(PAPER_SUMMARY_RUNS)} paper summary rows, got {len(rows)}")
+    required = [
+        "scenario_label", "scenario", "training_time_h", "decision_mean_ms",
+        "decision_p95_ms", "decision_steps", "convergence_epoch", "training_epochs",
+    ]
+    for row in rows:
+        missing = [key for key in required if row.get(key) is None]
+        if missing:
+            raise RuntimeError(f"{row.get('scenario_label')} missing paper summary fields: {missing}")
+        if row.get("decision_steps") != expected_steps:
+            raise RuntimeError(
+                f"{row.get('scenario_label')} latency steps={row.get('decision_steps')}, expected {expected_steps}"
+            )
+
+
 def write_json(payload: dict[str, Any], path: Path) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -777,6 +981,7 @@ def main() -> None:
 
     rows, metadata = collect_training_rows(args)
     twenty_node_rows, twenty_node_metadata = collect_static_training_rows(TWENTY_NODE_RUNS, args)
+    paper_summary_rows, paper_summary_metadata = collect_paper_summary_rows(args)
     attach_model_stats(rows, RUNS)
     attach_model_stats(twenty_node_rows, TWENTY_NODE_RUNS)
     twenty_node_latency_metadata = attach_existing_latency(
@@ -787,22 +992,32 @@ def main() -> None:
     latency_arrays = None
     decision_device = None
     if not args.skip_decision:
-        if OUTPUTS["latency"].exists() and not args.remeasure_decision:
-            latency_arrays = np.load(OUTPUTS["latency"], allow_pickle=True).item()
+        if not args.remeasure_decision:
+            latency_arrays, ten_node_latency_metadata = load_latency_arrays_for_runs(RUNS, TEN_NODE_LATENCY_PATH)
             attach_latency_arrays(rows, latency_arrays)
-            decision_device = "saved_latency_file"
+            np.save(OUTPUTS["latency"], latency_arrays, allow_pickle=True)
+            decision_device = "archived_latency_file"
         else:
             latency_stats, latency_arrays, decision_device = measure_decision_latency(args.total_steps, args.device)
             attach_latency(rows, latency_stats)
+            ten_node_latency_metadata = {
+                "path": relpath(OUTPUTS["latency"]),
+                "keys": {method: {"latency_key": method, "decision_steps": len(values)} for method, values in latency_arrays.items()},
+            }
             np.save(OUTPUTS["latency"], latency_arrays, allow_pickle=True)
+    else:
+        ten_node_latency_metadata = None
 
     payload = {
         "config": CONFIG_NAME,
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "decision_device": decision_device,
+        "paper_summary_rows": paper_summary_rows,
+        "paper_summary_metadata": paper_summary_metadata,
         "rows": rows,
         "extra_rows_20node": twenty_node_rows,
         "metadata": metadata,
+        "latency_10node": ten_node_latency_metadata,
         "extra_metadata_20node": twenty_node_metadata,
         "extra_latency_20node": twenty_node_latency_metadata,
         "outputs": {key: relpath(path) for key, path in OUTPUTS.items()},
@@ -810,9 +1025,10 @@ def main() -> None:
     validate_paths(payload)
     validate_outputs(rows, latency_arrays, args.total_steps)
     validate_static_rows(twenty_node_rows, require_latency=True, expected_steps=args.total_steps)
+    validate_paper_summary_rows(paper_summary_rows, expected_steps=args.total_steps)
 
     write_json(payload, OUTPUTS["json"])
-    write_markdown(rows, OUTPUTS["md"], twenty_node_rows=twenty_node_rows)
+    write_markdown(rows, OUTPUTS["md"], twenty_node_rows=twenty_node_rows, paper_summary_rows=paper_summary_rows)
     write_csv(rows, OUTPUTS["csv"])
     write_tex(rows, OUTPUTS["tex"])
 
