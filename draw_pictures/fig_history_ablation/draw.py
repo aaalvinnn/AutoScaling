@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(project_root, 'env'))
 
 fig_size = (7, 5)
 fontsize = 24
-legend_fontsize = 21
+legend_fontsize = 18
 label_size = 24
 line_width = 1.5
 grid_zorder = 0
@@ -75,10 +75,13 @@ for name, d in all_data.items():
 
 def draw_latency():
     plt.figure(figsize=fig_size)
+    all_max = max(np.max(all_data[name]["t_all"]) for name in ORDER)
+    all_min = min(np.min(all_data[name]["t_all"]) for name in ORDER)
     for i, name in enumerate(ORDER):
         arr = all_data[name]["t_all"]
         plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
                  linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
+    plt.ylim(0, all_max * 1.55)
     plt.xticks(fontsize=label_size); plt.yticks(fontsize=label_size)
     plt.ylabel('Latency', fontsize=fontsize); plt.xlabel("Timeslot", fontsize=fontsize)
     plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
@@ -91,10 +94,13 @@ def draw_latency():
 
 def draw_cost():
     plt.figure(figsize=fig_size)
+    all_max = max(np.max(all_data[name]["cost"]) for name in ORDER)
+    all_min = min(np.min(all_data[name]["cost"]) for name in ORDER)
     for i, name in enumerate(ORDER):
         arr = all_data[name]["cost"]
         plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
                  linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
+    plt.ylim(all_min * 0.85, all_max * 1.45)
     plt.xticks(fontsize=label_size); plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize); plt.xlabel("Timeslot", fontsize=fontsize)
     plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')

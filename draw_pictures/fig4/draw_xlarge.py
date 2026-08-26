@@ -68,14 +68,17 @@ def draw_latency(config_name, dataset):
 def draw_cost(config_name, dataset):
     datas = _load(config_name, "cost")
     plt.figure(figsize=(7, 5))
+    all_max = max(np.max(datas[a]) for a in agents)
+    all_min = min(np.min(datas[a]) for a in agents)
     for i, a in enumerate(agents):
         plt.plot(datas[a], label=labels[i], color=colors[i], linewidth=line_width,
                  zorder=line_zorder, linestyle=linestyles[i], marker='o', markersize=markersize)
+    plt.ylim(all_min * 0.85, all_max * 1.45)
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize)
     plt.xlabel("Timeslot", fontsize=fontsize)
-    plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
+    plt.legend(frameon=True, framealpha=0.85, fontsize=legend_fontsize - 4, loc='upper center', ncol=3, columnspacing=0.8, handletextpad=0.4)
     plt.tight_layout()
     plt.grid(True, zorder=grid_zorder)
     out = os.path.join(current_dir, f"Cost-{dataset}-{scale}.pdf")
