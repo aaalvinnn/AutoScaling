@@ -80,7 +80,7 @@ def draw_latency():
         plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
                  linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
     plt.xticks(fontsize=label_size); plt.yticks(fontsize=label_size)
-    plt.ylabel('Delay', fontsize=fontsize); plt.xlabel("Timeslot", fontsize=fontsize)
+    plt.ylabel('Latency', fontsize=fontsize); plt.xlabel("Timeslot", fontsize=fontsize)
     plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
     plt.tight_layout(); plt.grid(True, zorder=grid_zorder)
     for fmt in ["pdf", "png"]:
