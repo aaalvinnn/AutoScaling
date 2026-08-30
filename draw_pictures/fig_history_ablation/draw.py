@@ -6,6 +6,7 @@ Metrics: Delay (t_all), Cost
 import matplotlib.pyplot as plt
 import numpy as np
 import os, sys
+from matplotlib.ticker import MultipleLocator
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(current_dir))
@@ -74,40 +75,46 @@ for name, d in all_data.items():
         np.save(os.path.join(data_dir, f"{safe}_{metric}.npy"), arr)
 
 def draw_latency():
-    plt.figure(figsize=fig_size)
+    fig, ax = plt.subplots(figsize=fig_size)
     all_max = max(np.max(all_data[name]["t_all"]) for name in ORDER)
     all_min = min(np.min(all_data[name]["t_all"]) for name in ORDER)
     for i, name in enumerate(ORDER):
         arr = all_data[name]["t_all"]
-        plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
-                 linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
-    plt.ylim(0, all_max * 1.55)
-    plt.xticks(fontsize=label_size); plt.yticks(fontsize=label_size)
-    plt.ylabel('Latency', fontsize=fontsize); plt.xlabel("Timeslot", fontsize=fontsize)
-    plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
-    plt.tight_layout(); plt.grid(True, zorder=grid_zorder)
+        ax.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
+                linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
+    ax.set_ylim(all_min * 0.85, all_max * 1.35)
+    ax.xaxis.set_major_locator(MultipleLocator(50))
+    ax.yaxis.set_major_locator(MultipleLocator(5))
+    ax.tick_params(axis='both', labelsize=label_size)
+    ax.set_ylabel('Latency', fontsize=fontsize); ax.set_xlabel("Timeslot", fontsize=fontsize)
+    ax.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
+    ax.grid(True, zorder=grid_zorder)
+    plt.tight_layout()
     for fmt in ["pdf", "png"]:
         plt.savefig(os.path.join(current_dir, f"Delay-history-ablation-twitter.{fmt}"),
-                    format=fmt, dpi=150 if fmt == "png" else None)
+                    format=fmt, dpi=150 if fmt == "png" else None, bbox_inches='tight')
     plt.close()
     print("Saved Delay-history-ablation-twitter.pdf")
 
 def draw_cost():
-    plt.figure(figsize=fig_size)
+    fig, ax = plt.subplots(figsize=fig_size)
     all_max = max(np.max(all_data[name]["cost"]) for name in ORDER)
     all_min = min(np.min(all_data[name]["cost"]) for name in ORDER)
     for i, name in enumerate(ORDER):
         arr = all_data[name]["cost"]
-        plt.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
-                 linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
-    plt.ylim(all_min * 0.85, all_max * 1.45)
-    plt.xticks(fontsize=label_size); plt.yticks(fontsize=label_size)
-    plt.ylabel('Cost', fontsize=fontsize); plt.xlabel("Timeslot", fontsize=fontsize)
-    plt.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
-    plt.tight_layout(); plt.grid(True, zorder=grid_zorder)
+        ax.plot(arr, label=labels[i], color=colors[i], linewidth=line_width,
+                linestyle=linestyles[i], marker='o', markersize=markersize, alpha=alpha)
+    ax.set_ylim(all_min * 0.85, all_max * 1.3)
+    ax.xaxis.set_major_locator(MultipleLocator(50))
+    ax.yaxis.set_major_locator(MultipleLocator(5))
+    ax.tick_params(axis='both', labelsize=label_size)
+    ax.set_ylabel('Cost', fontsize=fontsize); ax.set_xlabel("Timeslot", fontsize=fontsize)
+    ax.legend(frameon=True, fontsize=legend_fontsize, loc='upper left')
+    ax.grid(True, zorder=grid_zorder)
+    plt.tight_layout()
     for fmt in ["pdf", "png"]:
         plt.savefig(os.path.join(current_dir, f"Cost-history-ablation-twitter.{fmt}"),
-                    format=fmt, dpi=150 if fmt == "png" else None)
+                    format=fmt, dpi=150 if fmt == "png" else None, bbox_inches='tight')
     plt.close()
     print("Saved Cost-history-ablation-twitter.pdf")
 

@@ -30,7 +30,7 @@ CONFIGS = [
 agents = ['RL Agent', 'Proscale', 'HPA', 'DeepScaler', 'LGDRL']
 labels = ['RL Agent', 'Proscale', 'PPA', 'DeepScaler', 'Ours']
 colors = ["#449945", "#f8c91c", "#376eae", "#8E6EC8", "#c22f2f"]
-linestyles = ['--', '--', '--', '--', '--']
+linestyles = ['--', '--', '--', '--', '-.']
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(current_dir))
@@ -51,7 +51,7 @@ def draw_latency(config_name, dataset):
     plt.figure(figsize=(14, 4))
     for i, a in enumerate(agents):
         plt.plot(datas[a], label=labels[i], color=colors[i], linewidth=line_width,
-                 zorder=line_zorder, linestyle=linestyles[i], marker='o', markersize=markersize)
+                 zorder=line_zorder, linestyle=linestyles[i])
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Latency', fontsize=fontsize)
@@ -72,8 +72,8 @@ def draw_cost(config_name, dataset):
     all_min = min(np.min(datas[a]) for a in agents)
     for i, a in enumerate(agents):
         plt.plot(datas[a], label=labels[i], color=colors[i], linewidth=line_width,
-                 zorder=line_zorder, linestyle=linestyles[i], marker='o', markersize=markersize)
-    plt.ylim(all_min * 0.85, all_max * 1.45)
+                 zorder=line_zorder, linestyle=linestyles[i])
+    plt.ylim(all_min * 0.85, all_max * 1.22)
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize)
@@ -83,6 +83,8 @@ def draw_cost(config_name, dataset):
     plt.grid(True, zorder=grid_zorder)
     out = os.path.join(current_dir, f"Cost-{dataset}-{scale}.pdf")
     plt.savefig(out, format="pdf")
+    png_out = os.path.splitext(out)[0] + ".png"
+    plt.savefig(png_out, format="png")
     plt.close()
     return out
 

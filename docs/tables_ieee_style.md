@@ -1,0 +1,48 @@
+# IEEE Style Tables: Experimental Parameters & AutoLFD Hyperparameters (Notation Aligned)
+
+### TABLE: EXPERIMENTAL CONFIGURATION PARAMETERS.
+
+| Parameter | Value |
+| :--- | :--- |
+| Number of data center servers ($N_s$) | 10 |
+| Number of microservice types ($N_m$) | 10 |
+| Number of user request streams ($R$) | 10 |
+| Time slot length ($\tau$) | 5 mins (288 slots/day) |
+| CPU resources of server $s$ ($CR_s$) | $[15, 30]$ cores |
+| Memory resources of server $s$ ($MR_s$) | $[200, 300]$ GB |
+| CPU resources required by microservice $m$ ($CR_m$) | $[1, 2]$ cores |
+| Memory resources required by microservice $m$ ($MR_m$) | $[10, 15]$ GB |
+| Processing rate of microservice $m$ ($\mu_m$) | $[3, 5]$ requests/slot |
+| Inter-server bandwidth | 3 Gbps |
+| Request response time limit ($T_{\max}$) | $[10, 20]$ time units |
+| Average cost budget constraint ($\tilde{C}$) | 35 |
+| Historical arrival rate window length | 10 |
+| Parallel environments | 8 |
+| Training epochs | 10000 |
+| Rollout steps per epoch | 288 |
+| Optimizer | Adam ($\epsilon_{\text{Adam}} = 10^{-5}$) |
+| Random seed | 1037 |
+| GPU | NVIDIA RTX 4080 (16 GB) |
+
+---
+
+### TABLE: HYPERPARAMETERS OF AutoLFD.
+
+| Parameter | Value | Description |
+| :--- | :--- | :--- |
+| $\eta$ | $5 \times 10^{-5}$ | Policy & value learning rate |
+| $\gamma$ | 0.95 | Discount factor |
+| $\hat{\lambda}$ | 0.95 | GAE decay parameter |
+| $\epsilon$ | 0.2 | PPO clipping coefficient |
+| $\phi_1$ | 1.0 | Policy loss coefficient |
+| $\phi_2$ | 0.01 | Entropy bonus coefficient |
+| $\phi_3$ | 0.5 | Value loss coefficient |
+| $V$ | 100 | Lyapunov tradeoff parameter |
+| $\text{clip}_{\text{grad}}$ | 0.5 | Maximum gradient norm clipping |
+| $d_{\text{state}}$ | 230 | State input feature dimension |
+| $d_{\text{hidden}}$ | 512 | Hidden layer dimension of MLP |
+| $n_{\text{layers}}$ | 3 | Number of shared MLP layers |
+| Activation | ReLU | Activation function |
+| Init scheme | Orthogonal | Orthogonal weight initialization ($\text{gain}=\sqrt{2}$) |
+| Actor output heads | 3 | Linear heads: Server ($N_s=10$), MS ($N_m=10$), $N_{mchange} \in [-3, 3]$ (7) |
+| Critic output head | 1 | Linear layer ($\mathbb{R}^{512} \to \mathbb{R}^1$) |

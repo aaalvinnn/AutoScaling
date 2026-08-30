@@ -38,7 +38,7 @@ else:
 
 scale = "Large Scale"
 colors = ["#449945", "#f8c91c", "#376eae", "#8E6EC8", "#c22f2f"]
-linestyles = ['--', '--', '--', '--', '--']
+linestyles = ['--', '--', '--', '--', '-.']
 
 def draw_latency(ds="alibaba"):
     d_path = sin_paths if ds == "sin" else (alibaba_paths if ds == "alibaba" else twitter_paths)
@@ -74,11 +74,11 @@ def draw_cost(ds="alibaba"):
     all_min = min(np.min(datas[agent]) for agent in datas)
     for i, agent in enumerate(datas):
         plt.plot(datas[agent], label=strs[i], color=colors[i], linewidth=line_width, zorder=line_zorder,
-                 linestyle=linestyles[i], marker='o', markersize=markersize)
+                 linestyle=linestyles[i])
 
     all_max = max(np.max(d) for d in datas.values())
     all_min = min(np.min(d) for d in datas.values())
-    plt.ylim(all_min * 0.85, all_max * 1.45)
+    plt.ylim(all_min * 0.85, all_max * 1.22)
     plt.xticks(fontsize=label_size)
     plt.yticks(fontsize=label_size)
     plt.ylabel('Cost', fontsize=fontsize)
@@ -87,6 +87,7 @@ def draw_cost(ds="alibaba"):
     plt.tight_layout()
     plt.grid(True, zorder=grid_zorder)
     plt.savefig(os.path.join(current_dir, f"Cost-{ds}-{scale}.pdf"), format="pdf")
+    plt.savefig(os.path.join(current_dir, f"Cost-{ds}-{scale}.png"), format="png")
     plt.close()
 
 if __name__ == '__main__':
